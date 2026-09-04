@@ -20,16 +20,54 @@ const BUDGET_TILES = [
   { emoji: "🚗", name: "Samochód", color: "var(--neatly-cat-16)", spent: 640, limit: 500 },
 ] as const;
 
-export default async function Home() {
+export default async function Home({
+  searchParams,
+}: {
+  searchParams: Promise<{ wallet?: string }>;
+}) {
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("active_household_id")
+    .eq("user_id", user.id)
+    .single();
+
+  const householdId = profile?.active_household_id;
+  if (!householdId) redirect("/household");
+
+  const [{ data: wallets }, { data: categories }] = await Promise.all([
+    supabase
+      .from("wallets")
+      .select("id, name, emoji")
+      .eq("household_id", householdId)
+      .eq("is_archived", false)
+      .order("position", { ascending: true }),
+    supabase
+      .from("categories")
+      .select("id, name, emoji, color, kind, position, is_archived")
+      .eq("household_id", householdId)
+      .order("position", { ascending: true }),
+  ]);
+
+  const { wallet: requestedWalletId } = await searchParams;
+  const activeWalletId =
+    (requestedWalletId && wallets?.some((w) => w.id === requestedWalletId) ? requestedWalletId : wallets?.[0]?.id) ??
+    "";
+
   return (
     <>
-      <Header walletName="Płatności miesięczne" email={user.email ?? null} />
+      <Header
+        wallets={wallets ?? []}
+        activeWalletId={activeWalletId}
+        householdId={householdId}
+        categories={categories ?? []}
+        email={user.email ?? null}
+      />
 
       <main className="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-4 p-4 md:grid md:grid-cols-[1fr_320px] md:items-start md:gap-6 md:p-6">
         {/* Prawa kolumna na mobile jest u góry */}

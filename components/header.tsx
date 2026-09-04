@@ -1,7 +1,23 @@
-import { ChevronDown, ChevronLeft, ChevronRight } from "lucide-react";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 import { UserMenu } from "@/components/user-menu";
+import { WalletSwitcher } from "@/components/wallet-switcher";
+import type { Category } from "@/components/category-manager";
 
-export function Header({ walletName, email }: { walletName: string; email: string | null }) {
+type Wallet = { id: string; name: string; emoji: string | null };
+
+export function Header({
+  wallets,
+  activeWalletId,
+  householdId,
+  categories,
+  email,
+}: {
+  wallets: Wallet[];
+  activeWalletId: string;
+  householdId: string;
+  categories: Category[];
+  email: string | null;
+}) {
   return (
     <header className="sticky top-0 z-10 border-b border-border bg-background">
       <div className="mx-auto flex h-14 max-w-5xl items-center gap-2 px-4 sm:gap-3">
@@ -10,14 +26,7 @@ export function Header({ walletName, email }: { walletName: string; email: strin
           <span className="hidden text-sm font-medium sm:inline">Neatly</span>
         </div>
 
-        <button
-          type="button"
-          className="flex shrink-0 items-center gap-1 rounded-[10px] border border-border bg-card px-2.5 py-1.5 text-sm font-medium sm:px-3"
-        >
-          <span aria-hidden>💵</span>
-          <span className="hidden sm:inline">{walletName}</span>
-          <ChevronDown className="h-4 w-4 text-muted-foreground" />
-        </button>
+        <WalletSwitcher wallets={wallets} activeWalletId={activeWalletId} householdId={householdId} />
 
         <div className="flex flex-1 items-center justify-center gap-0.5">
           <button
@@ -42,7 +51,7 @@ export function Header({ walletName, email }: { walletName: string; email: strin
           </button>
         </div>
 
-        <UserMenu email={email} />
+        <UserMenu email={email} householdId={householdId} categories={categories} />
       </div>
     </header>
   );
