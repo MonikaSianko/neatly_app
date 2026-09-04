@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { Header } from "@/components/header";
 import { SwipeMonth } from "@/components/swipe-month";
 import { TransactionGroupList, type TxGroup, type TxRow } from "@/components/transaction-group-list";
+import type { EditingRule } from "@/components/transaction-form";
 import { FabAddButton } from "@/components/fab-add-button";
 import { BudgetTiles, type BudgetRow } from "@/components/budget-tiles";
 import { OpeningBalance } from "@/components/opening-balance";
@@ -10,6 +11,7 @@ import { createClient } from "@/lib/supabase/server";
 import { parseMonthParam, monthRange, isoToday } from "@/lib/month";
 import { computeSummary, categorySpent } from "@/lib/summary";
 import { money } from "@/lib/format";
+import { ensureMonthMaterialized } from "@/lib/materialize";
 
 const TABS = [
   { key: "upcoming", label: "Nadchodzące" },
@@ -61,7 +63,11 @@ export default async function Home({
     ? (params.tab as "upcoming" | "expense" | "income")
     : "expense";
 
-  const [{ data: transactions }, { data: budgets }, { data: opening }] = await Promise.all([
+  if (activeWalletId) {
+    await ensureMonthMaterialized(supabase, householdId, activeWalletId, ym);
+  }
+
+  const [{ data: transactions }, { data: budgets }, { data: opening }, { data: recurringRules }] = await Promise.all([
     supabase
       .from("transactions")
       .select("id, kind, title, amount_cents, category_id, date, is_paid, recurring_rule_id")
@@ -82,11 +88,22 @@ export default async function Home({
       .eq("wallet_id", activeWalletId)
       .eq("month", monthDate)
       .maybeSingle(),
+    supabase
+      .from("recurring_rules")
+      .select("id, freq, interval, weekdays, until_date")
+      .eq("household_id", householdId)
+      .eq("wallet_id", activeWalletId),
   ]);
 
   const monthTx = transactions ?? [];
   const monthBudgets = budgets ?? [];
   const openingCents = opening?.amount_cents ?? 0;
+  const rulesMap: Record<string, EditingRule> = Object.fromEntries(
+    (recurringRules ?? []).map((r) => [
+      r.id,
+      { freq: r.freq as EditingRule["freq"], interval: r.interval, weekdays: r.weekdays, untilDate: r.until_date },
+    ])
+  );
 
   const summary = computeSummary(
     monthTx.map((t) => ({ kind: t.kind, amount_cents: t.amount_cents, is_paid: t.is_paid, category_id: t.category_id })),
@@ -220,6 +237,7 @@ export default async function Home({
                 householdId={householdId}
                 walletId={activeWalletId}
                 categories={categories ?? []}
+                rules={rulesMap}
                 today={today}
                 defaultDate={defaultDate}
               />

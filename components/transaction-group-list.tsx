@@ -9,8 +9,10 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { TransactionForm, type EditingTransaction } from "@/components/transaction-form";
+import { TransactionForm, type EditingTransaction, type EditingRule } from "@/components/transaction-form";
+import { ScopeDialog, type Scope } from "@/components/scope-dialog";
 import { deleteTransaction, moveTransactionToNextMonth } from "@/lib/actions/transactions";
+import { deleteRecurringEntry } from "@/lib/actions/recurring";
 import { createClient } from "@/lib/supabase/client";
 import { money, shortDate } from "@/lib/format";
 
@@ -38,6 +40,7 @@ export function TransactionGroupList({
   householdId,
   walletId,
   categories,
+  rules,
   today,
   defaultDate,
 }: {
@@ -46,6 +49,7 @@ export function TransactionGroupList({
   householdId: string;
   walletId: string;
   categories: Category[];
+  rules: Record<string, EditingRule>;
   today: string;
   defaultDate: string;
 }) {
@@ -53,6 +57,7 @@ export function TransactionGroupList({
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [overrides, setOverrides] = useState<Record<string, boolean>>({});
   const [editing, setEditing] = useState<EditingTransaction | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<TxRow | null>(null);
 
   function toggleGroup(id: string) {
     setExpanded((prev) => {
@@ -81,8 +86,20 @@ export function TransactionGroupList({
   function startMoveNext(id: string, date: string) {
     moveTransactionToNextMonth(id, date).then(() => router.refresh());
   }
-  function startDelete(id: string) {
-    deleteTransaction(id).then(() => router.refresh());
+
+  function requestDelete(row: TxRow) {
+    if (row.recurring_rule_id) {
+      setDeleteTarget(row);
+    } else {
+      deleteTransaction(row.id).then(() => router.refresh());
+    }
+  }
+
+  function pickDeleteScope(scope: Scope) {
+    if (!deleteTarget) return;
+    const id = deleteTarget.id;
+    setDeleteTarget(null);
+    deleteRecurringEntry(id, scope).then(() => router.refresh());
   }
 
   if (groups.length === 0) {
@@ -158,22 +175,17 @@ export function TransactionGroupList({
                                   categoryId: row.category_id,
                                   date: row.date,
                                   isPaid: paid,
+                                  recurringRuleId: row.recurring_rule_id,
+                                  rule: row.recurring_rule_id ? rules[row.recurring_rule_id] ?? null : null,
                                 })
                               }
                             >
                               <Pencil className="h-4 w-4" /> Edytuj
                             </DropdownMenuItem>
-                            <DropdownMenuItem
-                              onClick={() =>
-                                startMoveNext(row.id, row.date)
-                              }
-                            >
+                            <DropdownMenuItem onClick={() => startMoveNext(row.id, row.date)}>
                               <ArrowRightCircle className="h-4 w-4" /> Przenieś na następny miesiąc
                             </DropdownMenuItem>
-                            <DropdownMenuItem
-                              variant="destructive"
-                              onClick={() => startDelete(row.id)}
-                            >
+                            <DropdownMenuItem variant="destructive" onClick={() => requestDelete(row)}>
                               <Trash2 className="h-4 w-4" /> Usuń
                             </DropdownMenuItem>
                           </DropdownMenuContent>
@@ -196,6 +208,13 @@ export function TransactionGroupList({
         categories={categories}
         defaultDate={defaultDate}
         editing={editing}
+      />
+
+      <ScopeDialog
+        open={!!deleteTarget}
+        onOpenChange={(open) => !open && setDeleteTarget(null)}
+        title="Usuń płatność cykliczną"
+        onPick={pickDeleteScope}
       />
     </>
   );

@@ -28,10 +28,16 @@ export function shiftMonth({ y, m }: YearMonth, k: number): YearMonth {
   return { y: y + Math.floor(t / 12), m: (((t % 12) + 12) % 12) + 1 };
 }
 
-const toDate = (iso: string) => {
+export const toDate = (iso: string): Date => {
   const [y, m, d] = iso.split("-").map(Number);
   return new Date(y, m - 1, d);
 };
+
+export const isoOf = (d: Date): string => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+
+export const addDays = (dt: Date, n: number): Date => new Date(dt.getFullYear(), dt.getMonth(), dt.getDate() + n);
+
+export const diffDays = (a: Date, b: Date): number => Math.round((a.getTime() - b.getTime()) / 86400000);
 
 /** Dodaje k miesiecy do daty ISO, docinajac dzien do ostatniego dnia docelowego miesiaca. */
 export function addMonthsClamped(iso: string, k: number): string {
