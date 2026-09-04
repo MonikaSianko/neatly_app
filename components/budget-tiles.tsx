@@ -10,6 +10,8 @@ import {
 } from "@/lib/actions/budgets";
 import { money } from "@/lib/format";
 import type { YearMonth } from "@/lib/month";
+import { useLocale } from "@/components/locale-provider";
+import { categoryDisplayName } from "@/lib/i18n";
 
 type Category = { id: string; name: string; emoji: string; color: string };
 export type BudgetRow = { id: string; categoryId: string; limitCents: number; spentCents: number };
@@ -30,6 +32,7 @@ export function BudgetTiles({
   rows: BudgetRow[];
 }) {
   const router = useRouter();
+  const { locale, t } = useLocale();
   const [edit, setEdit] = useState<Draft | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
@@ -72,21 +75,19 @@ export function BudgetTiles({
   return (
     <section className="rounded-[14px] border border-border bg-card p-4">
       <div className="mb-3 flex items-center justify-between">
-        <h2 className="text-sm font-medium">Budżety wydatków</h2>
+        <h2 className="text-sm font-medium">{t.budgets}</h2>
         <button
           type="button"
           onClick={() => setEdit({ id: null, categoryId: "", amount: "" })}
           className="rounded-[10px] border border-border px-2.5 py-1 text-xs font-medium hover:bg-muted"
         >
-          Ustaw budżet
+          {t.setBudget}
         </button>
       </div>
 
       {rows.length === 0 ? (
         <div className="flex flex-col gap-3">
-          <p className="text-xs text-muted-foreground">
-            Przypisz miesięczny limit do kategorii, żeby zarezerwować na nią pieniądze w tym portfelu.
-          </p>
+          <p className="text-xs text-muted-foreground">{t.budgetsEmpty}</p>
           <button
             type="button"
             onClick={copyPrev}
@@ -94,7 +95,7 @@ export function BudgetTiles({
             className="w-fit text-xs font-medium disabled:opacity-50"
             style={{ color: "var(--neatly-primary-dark)" }}
           >
-            Skopiuj budżety z poprzedniego miesiąca
+            {t.copyPrev}
           </button>
         </div>
       ) : (
@@ -119,10 +120,10 @@ export function BudgetTiles({
                 <div className="flex items-center justify-between text-sm">
                   <span className="flex items-center gap-1.5 font-medium">
                     <span aria-hidden>{cat?.emoji}</span>
-                    {cat?.name}
+                    {cat ? categoryDisplayName(cat.name, locale) : ""}
                   </span>
                   <span className="tabular text-xs text-muted-foreground">
-                    {money(row.spentCents)} / {money(row.limitCents)}
+                    {money(row.spentCents, locale)} / {money(row.limitCents, locale)}
                   </span>
                 </div>
                 <div className="mt-2 h-2 w-full rounded-full" style={{ background: "var(--neatly-primary-soft)" }}>
@@ -133,8 +134,8 @@ export function BudgetTiles({
                 </div>
                 <div className="mt-1 text-[11px]" style={{ color: over ? "var(--destructive)" : "var(--muted-foreground)" }}>
                   {over
-                    ? `Przekroczono o ${money(row.spentCents - row.limitCents)}`
-                    : `Zostało ${money(row.limitCents - row.spentCents)}`}
+                    ? `${t.over} ${money(row.spentCents - row.limitCents, locale)}`
+                    : `${t.left} ${money(row.limitCents - row.spentCents, locale)}`}
                 </div>
               </button>
             );
@@ -145,12 +146,12 @@ export function BudgetTiles({
       <Sheet open={!!edit} onOpenChange={(open) => !open && setEdit(null)}>
         <SheetContent className="sm:max-w-sm">
           <SheetHeader>
-            <SheetTitle>{edit?.id ? "Edytuj budżet" : "Nowy budżet wydatków"}</SheetTitle>
+            <SheetTitle>{edit?.id ? t.editBudget : t.newBudget}</SheetTitle>
           </SheetHeader>
           {edit && (
             <form onSubmit={submit} className="flex flex-col gap-4 px-4 pb-4">
               <div>
-                <label className="mb-1.5 block text-sm font-medium">Kategoria</label>
+                <label className="mb-1.5 block text-sm font-medium">{t.category}</label>
                 <select
                   value={edit.categoryId}
                   disabled={!!edit.id}
@@ -160,13 +161,13 @@ export function BudgetTiles({
                   <option value="">—</option>
                   {available.map((c) => (
                     <option key={c.id} value={c.id}>
-                      {c.emoji} {c.name}
+                      {c.emoji} {categoryDisplayName(c.name, locale)}
                     </option>
                   ))}
                 </select>
               </div>
               <div>
-                <label className="mb-1.5 block text-sm font-medium">Limit na miesiąc (PLN)</label>
+                <label className="mb-1.5 block text-sm font-medium">{t.limitMonth}</label>
                 <input
                   autoFocus
                   inputMode="decimal"
@@ -176,10 +177,7 @@ export function BudgetTiles({
                   className="w-full rounded-[10px] border border-border bg-muted px-3 py-2 text-sm"
                 />
               </div>
-              <p className="text-xs text-muted-foreground">
-                Limit rezerwuje pieniądze w wydatkach miesiąca. Dopóki wydasz mniej, do sumy wchodzi cała kwota
-                limitu; po przekroczeniu — rzeczywista suma pozycji.
-              </p>
+              <p className="text-xs text-muted-foreground">{t.budgetHint}</p>
               {error && <p className="text-xs" style={{ color: "var(--destructive)" }}>{error}</p>}
               <div className="flex gap-2">
                 <button
@@ -188,7 +186,7 @@ export function BudgetTiles({
                   className="flex-1 rounded-[10px] px-4 py-2.5 text-sm font-medium text-primary-foreground disabled:opacity-50"
                   style={{ background: "var(--primary)" }}
                 >
-                  Zapisz
+                  {t.save}
                 </button>
                 {edit.id && (
                   <button
@@ -198,7 +196,7 @@ export function BudgetTiles({
                     className="rounded-[10px] px-4 py-2.5 text-sm font-medium"
                     style={{ background: "var(--neatly-danger-soft)", color: "var(--destructive)" }}
                   >
-                    Usuń
+                    {t.del}
                   </button>
                 )}
               </div>

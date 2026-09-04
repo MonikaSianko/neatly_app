@@ -2,7 +2,9 @@
 
 import { useState } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { REPEAT_OPTIONS, WEEKDAY_LABELS_PL, presetToPattern, type RepeatPreset } from "@/lib/recurrence-presets";
+import { repeatOptions, presetToPattern, type RepeatPreset } from "@/lib/recurrence-presets";
+import { WEEKDAYS } from "@/lib/i18n";
+import { useLocale } from "@/components/locale-provider";
 import type { RecurrencePattern } from "@/lib/actions/recurring";
 
 export function DraftRecurrenceDialog({
@@ -16,6 +18,8 @@ export function DraftRecurrenceDialog({
   initialPattern: RecurrencePattern | null;
   onApply: (pattern: RecurrencePattern | null) => void;
 }) {
+  const { locale, t } = useLocale();
+  const weekdayLabels = WEEKDAYS[locale];
   const [preset, setPreset] = useState<RepeatPreset>(initialPattern ? "custom" : "never");
   const [weekdays, setWeekdays] = useState<number[]>(initialPattern?.weekdays ?? []);
   const [customFreq, setCustomFreq] = useState<"day" | "week" | "month" | "year">(initialPattern?.freq ?? "month");
@@ -41,7 +45,7 @@ export function DraftRecurrenceDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-sm">
         <DialogHeader>
-          <DialogTitle>Cykliczność</DialogTitle>
+          <DialogTitle>{t.recurrence}</DialogTitle>
         </DialogHeader>
         <div className="flex flex-col gap-4 px-4 pb-4">
           <select
@@ -49,7 +53,7 @@ export function DraftRecurrenceDialog({
             onChange={(e) => setPreset(e.target.value as RepeatPreset)}
             className="w-full rounded-[10px] border border-border bg-muted px-3 py-2 text-sm"
           >
-            {REPEAT_OPTIONS.map((o) => (
+            {repeatOptions(t).map((o) => (
               <option key={o.value} value={o.value}>
                 {o.label}
               </option>
@@ -58,7 +62,7 @@ export function DraftRecurrenceDialog({
 
           {(preset === "weekdays" || (preset === "custom" && customFreq === "week")) && (
             <div className="flex flex-wrap gap-1.5">
-              {WEEKDAY_LABELS_PL.map((label, i) => {
+              {weekdayLabels.map((label, i) => {
                 const d = i + 1;
                 const active = weekdays.includes(d);
                 return (
@@ -90,10 +94,10 @@ export function DraftRecurrenceDialog({
                 onChange={(e) => setCustomFreq(e.target.value as typeof customFreq)}
                 className="flex-1 rounded-[10px] border border-border bg-muted px-3 py-2 text-sm"
               >
-                <option value="day">dni</option>
-                <option value="week">tygodni</option>
-                <option value="month">miesięcy</option>
-                <option value="year">lat</option>
+                <option value="day">{t.daily}</option>
+                <option value="week">{t.weekly}</option>
+                <option value="month">{t.monthly}</option>
+                <option value="year">{t.yearly}</option>
               </select>
             </div>
           )}
@@ -105,8 +109,8 @@ export function DraftRecurrenceDialog({
                 onChange={(e) => setUntilMode(e.target.value as "never" | "date")}
                 className="rounded-[10px] border border-border bg-muted px-3 py-2 text-sm"
               >
-                <option value="never">Bez końca</option>
-                <option value="date">Do dnia</option>
+                <option value="never">{t.noEnd}</option>
+                <option value="date">{t.untilDay}</option>
               </select>
               {untilMode === "date" && (
                 <input
@@ -126,7 +130,7 @@ export function DraftRecurrenceDialog({
               className="flex-1 rounded-[10px] px-4 py-2.5 text-sm font-medium text-primary-foreground"
               style={{ background: "var(--primary)" }}
             >
-              Zastosuj
+              {t.apply}
             </button>
             {preset !== "never" && (
               <button
@@ -137,7 +141,7 @@ export function DraftRecurrenceDialog({
                 }}
                 className="rounded-[10px] border border-border px-4 py-2.5 text-sm font-medium hover:bg-muted"
               >
-                Wyłącz cykliczność
+                {t.clearRepeat}
               </button>
             )}
           </div>

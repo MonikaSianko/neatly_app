@@ -1,19 +1,20 @@
 import type { RecurrencePattern } from "@/lib/actions/recurring";
+import type { Dict } from "@/lib/i18n";
 
 export type RepeatPreset = "never" | "day" | "week" | "weekdays" | "biweek" | "month" | "year" | "custom";
 
-export const REPEAT_OPTIONS: { value: RepeatPreset; label: string }[] = [
-  { value: "never", label: "Nigdy" },
-  { value: "day", label: "Codziennie" },
-  { value: "week", label: "Co tydzień" },
-  { value: "weekdays", label: "Wybrane dni tygodnia" },
-  { value: "biweek", label: "Co dwa tygodnie" },
-  { value: "month", label: "Co miesiąc" },
-  { value: "year", label: "Co rok" },
-  { value: "custom", label: "Niestandardowo" },
-];
-
-export const WEEKDAY_LABELS_PL = ["pon", "wt", "śr", "czw", "pt", "sob", "nd"];
+export function repeatOptions(t: Dict): { value: RepeatPreset; label: string }[] {
+  return [
+    { value: "never", label: t.never },
+    { value: "day", label: t.daily },
+    { value: "week", label: t.weekly },
+    { value: "weekdays", label: t.pickedDays },
+    { value: "biweek", label: t.biweekly },
+    { value: "month", label: t.monthly },
+    { value: "year", label: t.yearly },
+    { value: "custom", label: t.custom },
+  ];
+}
 
 export function presetToPattern(
   preset: RepeatPreset,

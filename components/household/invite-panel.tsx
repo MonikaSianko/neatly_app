@@ -3,8 +3,11 @@
 import { useState, useTransition } from "react";
 import { Copy, Check } from "lucide-react";
 import { createHouseholdInvite } from "@/app/household/actions";
+import { useLocale } from "@/components/locale-provider";
 
 type Invite = { code: string; expires_at: string };
+
+const INTL_LOCALE = { pl: "pl-PL", en: "en-GB" } as const;
 
 export function InvitePanel({
   householdId,
@@ -13,6 +16,7 @@ export function InvitePanel({
   householdId: string;
   initialInvite: Invite | null;
 }) {
+  const { locale, t } = useLocale();
   const [invite, setInvite] = useState<Invite | null>(initialInvite);
   const [copied, setCopied] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -47,7 +51,7 @@ export function InvitePanel({
           <div>
             <div className="tabular text-sm font-medium">{invite.code}</div>
             <div className="text-[11px] text-muted-foreground">
-              Ważny do {new Date(invite.expires_at).toLocaleDateString("pl-PL")}
+              {t.validUntil} {new Date(invite.expires_at).toLocaleDateString(INTL_LOCALE[locale])}
             </div>
           </div>
           <button
@@ -56,7 +60,7 @@ export function InvitePanel({
             className="flex items-center gap-1.5 rounded-[10px] border border-border px-2.5 py-1.5 text-xs font-medium hover:bg-muted"
           >
             {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
-            {copied ? "Skopiowano" : "Kopiuj"}
+            {copied ? t.codeCopied : t.copyCode}
           </button>
         </div>
       ) : (
@@ -66,7 +70,7 @@ export function InvitePanel({
           disabled={pending}
           className="w-fit rounded-[10px] border border-border px-3 py-2 text-sm font-medium hover:bg-muted disabled:opacity-50"
         >
-          Zaproś osobę
+          {t.invitePerson}
         </button>
       )}
       {error && <span className="text-xs" style={{ color: "var(--destructive)" }}>{error}</span>}

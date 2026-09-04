@@ -12,6 +12,8 @@ import {
   deleteOrArchiveCategory,
   type CategoryKind,
 } from "@/lib/actions/categories";
+import { useLocale } from "@/components/locale-provider";
+import { categoryDisplayName } from "@/lib/i18n";
 
 const PALETTE = [
   "#5865F2", "#6389DE", "#4390DA", "#0099CF", "#009EC4", "#00A3AC",
@@ -48,6 +50,7 @@ export function CategoryManager({
   householdId: string;
   categories: Category[];
 }) {
+  const { locale, t } = useLocale();
   const [kind, setKind] = useState<CategoryKind>("expense");
   const [edit, setEdit] = useState<Draft | null>(null);
   const [showArchived, setShowArchived] = useState(false);
@@ -100,14 +103,14 @@ export function CategoryManager({
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent className="sm:max-w-md">
         <SheetHeader>
-          <SheetTitle>Kategorie</SheetTitle>
+          <SheetTitle>{t.categories}</SheetTitle>
         </SheetHeader>
         <div className="flex flex-1 flex-col gap-4 overflow-y-auto px-4 pb-4">
           <div className="flex w-fit gap-1 rounded-full border border-border bg-card p-1">
             {(
               [
-                ["expense", "Wydatki"],
-                ["income", "Przychody"],
+                ["expense", t.expenses],
+                ["income", t.income],
               ] as const
             ).map(([k, label]) => (
               <button
@@ -137,7 +140,7 @@ export function CategoryManager({
               >
                 <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: c.color }} />
                 <span aria-hidden>{c.emoji}</span>
-                <span className="flex-1 truncate text-sm">{c.name}</span>
+                <span className="flex-1 truncate text-sm">{categoryDisplayName(c.name, locale)}</span>
                 <button
                   type="button"
                   onClick={() => move(c.id, -1)}
@@ -179,7 +182,7 @@ export function CategoryManager({
             onClick={() => setEdit({ id: null, name: "", emoji: "📦", color: PALETTE[0] })}
             className="flex w-full items-center justify-center gap-1.5 rounded-[10px] border border-border py-2 text-sm font-medium hover:bg-muted"
           >
-            <Plus className="h-4 w-4" /> Nowa kategoria
+            <Plus className="h-4 w-4" /> {t.newCategory}
           </button>
 
           {archived.length > 0 && (
@@ -189,7 +192,7 @@ export function CategoryManager({
                 onClick={() => setShowArchived(!showArchived)}
                 className="flex items-center gap-1.5 text-sm text-muted-foreground"
               >
-                <Archive className="h-3.5 w-3.5" /> Zarchiwizowane ({archived.length})
+                <Archive className="h-3.5 w-3.5" /> {t.archived} ({archived.length})
               </button>
               {showArchived && (
                 <div className="mt-2 rounded-[14px] border border-border">
@@ -199,7 +202,9 @@ export function CategoryManager({
                       className={`flex items-center gap-2 bg-muted px-3 py-2 ${i > 0 ? "border-t border-border" : ""}`}
                     >
                       <span aria-hidden>{c.emoji}</span>
-                      <span className="flex-1 truncate text-sm text-muted-foreground">{c.name}</span>
+                      <span className="flex-1 truncate text-sm text-muted-foreground">
+                        {categoryDisplayName(c.name, locale)}
+                      </span>
                       <button
                         type="button"
                         onClick={() => restore(c.id)}
@@ -207,7 +212,7 @@ export function CategoryManager({
                         className="flex items-center gap-1 p-1 text-xs"
                         style={{ color: "var(--neatly-primary-dark)" }}
                       >
-                        <RotateCcw className="h-3.5 w-3.5" /> Przywróć
+                        <RotateCcw className="h-3.5 w-3.5" /> {t.restore}
                       </button>
                     </div>
                   ))}
@@ -221,7 +226,7 @@ export function CategoryManager({
           {edit && (
             <form onSubmit={submitEdit} className="flex flex-col gap-4 border-t border-border pt-4">
               <div>
-                <label className="mb-1.5 block text-sm font-medium">Nazwa</label>
+                <label className="mb-1.5 block text-sm font-medium">{t.walletName}</label>
                 <input
                   autoFocus
                   value={edit.name}
@@ -230,11 +235,11 @@ export function CategoryManager({
                 />
               </div>
               <div>
-                <label className="mb-1.5 block text-sm font-medium">Ikona</label>
+                <label className="mb-1.5 block text-sm font-medium">{t.icon}</label>
                 <EmojiPicker value={edit.emoji} onChange={(emoji) => setEdit({ ...edit, emoji })} />
               </div>
               <div>
-                <label className="mb-1.5 block text-sm font-medium">Kolor</label>
+                <label className="mb-1.5 block text-sm font-medium">{t.color}</label>
                 <div className="flex flex-wrap gap-1.5">
                   {PALETTE.map((p) => (
                     <button
@@ -258,14 +263,14 @@ export function CategoryManager({
                   className="flex-1 rounded-[10px] px-4 py-2 text-sm font-medium text-primary-foreground disabled:opacity-50"
                   style={{ background: "var(--primary)" }}
                 >
-                  Zapisz kategorię
+                  {t.saveCategory}
                 </button>
                 <button
                   type="button"
                   onClick={() => setEdit(null)}
                   className="rounded-[10px] border border-border px-4 py-2 text-sm font-medium hover:bg-muted"
                 >
-                  Anuluj
+                  {t.cancel}
                 </button>
               </div>
             </form>

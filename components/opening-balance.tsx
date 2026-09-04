@@ -7,6 +7,7 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sh
 import { setMonthOpening, carryOverOpening } from "@/lib/actions/budgets";
 import { money } from "@/lib/format";
 import type { YearMonth } from "@/lib/month";
+import { useLocale } from "@/components/locale-provider";
 
 export function OpeningBalance({
   householdId,
@@ -20,6 +21,7 @@ export function OpeningBalance({
   openingCents: number;
 }) {
   const router = useRouter();
+  const { locale, t } = useLocale();
   const [open, setOpen] = useState(false);
   const [amount, setAmount] = useState((openingCents / 100).toFixed(2).replace(".", ","));
   const [pending, startTransition] = useTransition();
@@ -52,19 +54,19 @@ export function OpeningBalance({
         }}
         className="flex items-center gap-1 text-sm text-muted-foreground"
       >
-        Stan początkowy
-        <span className="tabular font-medium text-foreground">{money(openingCents)}</span>
+        {t.opening}
+        <span className="tabular font-medium text-foreground">{money(openingCents, locale)}</span>
         <Pencil className="h-3 w-3" />
       </button>
 
       <Sheet open={open} onOpenChange={setOpen}>
         <SheetContent className="sm:max-w-sm">
           <SheetHeader>
-            <SheetTitle>Stan początkowy miesiąca</SheetTitle>
+            <SheetTitle>{t.editOpening}</SheetTitle>
           </SheetHeader>
           <div className="flex flex-col gap-4 px-4 pb-4">
             <div>
-              <label className="mb-1.5 block text-sm font-medium">Kwota</label>
+              <label className="mb-1.5 block text-sm font-medium">{t.amount}</label>
               <input
                 autoFocus
                 inputMode="decimal"
@@ -74,10 +76,7 @@ export function OpeningBalance({
                 className="w-full rounded-[10px] border border-border bg-muted px-3 py-2 text-sm"
               />
             </div>
-            <p className="text-xs text-muted-foreground">
-              Ile masz na koncie pierwszego dnia miesiąca. Nic nie przenosi się automatycznie — wpisujesz albo
-              przenosisz jednym kliknięciem.
-            </p>
+            <p className="text-xs text-muted-foreground">{t.openingHint}</p>
             <button
               type="button"
               onClick={carryOver}
@@ -85,7 +84,7 @@ export function OpeningBalance({
               className="flex w-fit items-center gap-1.5 text-sm disabled:opacity-50"
               style={{ color: "var(--neatly-primary-dark)" }}
             >
-              <CornerDownRight className="h-3.5 w-3.5" /> Przenieś z poprzedniego miesiąca
+              <CornerDownRight className="h-3.5 w-3.5" /> {t.carryPrev}
             </button>
             <div className="flex gap-2">
               <button
@@ -95,14 +94,14 @@ export function OpeningBalance({
                 className="flex-1 rounded-[10px] px-4 py-2.5 text-sm font-medium text-primary-foreground disabled:opacity-50"
                 style={{ background: "var(--primary)" }}
               >
-                Zapisz
+                {t.save}
               </button>
               <button
                 type="button"
                 onClick={() => setOpen(false)}
                 className="rounded-[10px] border border-border px-4 py-2.5 text-sm font-medium hover:bg-muted"
               >
-                Anuluj
+                {t.cancel}
               </button>
             </div>
           </div>

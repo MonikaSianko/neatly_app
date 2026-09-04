@@ -1,14 +1,9 @@
 "use client";
 
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { useLocale } from "@/components/locale-provider";
 
 export type Scope = "this" | "future" | "all";
-
-const OPTIONS: { value: Scope; label: string; hint: string }[] = [
-  { value: "this", label: "To wystąpienie", hint: "Pozostałe raty zostają bez zmian." },
-  { value: "future", label: "To i przyszłe", hint: "Wcześniejsze raty zostają nietknięte." },
-  { value: "all", label: "Wszystkie", hint: "Opłacone raty i ręczne wyjątki zostają zachowane." },
-];
 
 export function ScopeDialog({
   open,
@@ -21,17 +16,22 @@ export function ScopeDialog({
   title: string;
   onPick: (scope: Scope) => void;
 }) {
+  const { t } = useLocale();
+  const options: { value: Scope; label: string; hint: string }[] = [
+    { value: "this", label: t.scopeThis, hint: t.scopeThisH },
+    { value: "future", label: t.scopeFuture, hint: t.scopeFutureH },
+    { value: "all", label: t.scopeAll, hint: t.scopeAllH },
+  ];
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-sm">
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
         </DialogHeader>
-        <p className="px-4 text-sm text-muted-foreground">
-          Ta pozycja należy do serii. Wybierz, czego ma dotyczyć zmiana.
-        </p>
+        <p className="px-4 text-sm text-muted-foreground">{t.scopeIntro}</p>
         <div className="flex flex-col gap-2 p-4 pt-2">
-          {OPTIONS.map((opt) => (
+          {options.map((opt) => (
             <button
               key={opt.value}
               type="button"

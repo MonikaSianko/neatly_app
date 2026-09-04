@@ -15,6 +15,8 @@ import { deleteTransaction, moveTransactionToNextMonth } from "@/lib/actions/tra
 import { deleteRecurringEntry } from "@/lib/actions/recurring";
 import { createClient } from "@/lib/supabase/client";
 import { money, shortDate } from "@/lib/format";
+import { useLocale } from "@/components/locale-provider";
+import { categoryDisplayName } from "@/lib/i18n";
 
 export type TxRow = {
   id: string;
@@ -54,6 +56,7 @@ export function TransactionGroupList({
   defaultDate: string;
 }) {
   const router = useRouter();
+  const { locale, t } = useLocale();
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [overrides, setOverrides] = useState<Record<string, boolean>>({});
   const [editing, setEditing] = useState<EditingTransaction | null>(null);
@@ -105,7 +108,7 @@ export function TransactionGroupList({
   if (groups.length === 0) {
     return (
       <div className="rounded-[14px] border border-border bg-card p-6 text-center text-sm text-muted-foreground">
-        Brak pozycji w tym miesiącu. Dodaj pierwszą, żeby zobaczyć podsumowanie.
+        {t.emptyList}
       </div>
     );
   }
@@ -124,9 +127,11 @@ export function TransactionGroupList({
                 className="flex w-full items-center gap-2 px-4 py-3 text-left"
               >
                 <span aria-hidden>{group.category?.emoji}</span>
-                <span className="flex-1 truncate text-sm font-medium">{group.category?.name ?? "—"}</span>
-                <span className="text-xs text-muted-foreground">{group.items.length} poz.</span>
-                <span className="tabular text-sm font-medium">{money(group.sum)}</span>
+                <span className="flex-1 truncate text-sm font-medium">
+                  {group.category ? categoryDisplayName(group.category.name, locale) : "—"}
+                </span>
+                <span className="text-xs text-muted-foreground">{group.items.length} {t.rows}</span>
+                <span className="tabular text-sm font-medium">{money(group.sum, locale)}</span>
                 <ChevronDown
                   className="h-4 w-4 text-muted-foreground transition-transform"
                   style={{ transform: isOpen ? "rotate(180deg)" : undefined }}
@@ -147,17 +152,17 @@ export function TransactionGroupList({
                           checked={paid}
                           onChange={() => togglePaid(row)}
                           className="h-4 w-4 rounded-[6px]"
-                          aria-label={kind === "income" ? "Otrzymane" : "Opłacone"}
+                          aria-label={kind === "income" ? t.received : t.paid}
                         />
                         <span className="flex-1 truncate text-sm">
                           {row.title}
                           {row.recurring_rule_id && <span className="ml-1">🔁</span>}
                         </span>
                         <span className="text-xs" style={{ color: overdue ? "var(--destructive)" : "var(--muted-foreground)" }}>
-                          {shortDate(row.date)}
-                          {overdue && " zaległe"}
+                          {shortDate(row.date, locale)}
+                          {overdue && ` ${t.overdue}`}
                         </span>
-                        <span className="tabular text-sm font-medium">{money(row.amount_cents)}</span>
+                        <span className="tabular text-sm font-medium">{money(row.amount_cents, locale)}</span>
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
                             <button type="button" className="p-1 text-muted-foreground" aria-label="Menu pozycji">
@@ -180,13 +185,13 @@ export function TransactionGroupList({
                                 })
                               }
                             >
-                              <Pencil className="h-4 w-4" /> Edytuj
+                              <Pencil className="h-4 w-4" /> {t.edit}
                             </DropdownMenuItem>
                             <DropdownMenuItem onClick={() => startMoveNext(row.id, row.date)}>
-                              <ArrowRightCircle className="h-4 w-4" /> Przenieś na następny miesiąc
+                              <ArrowRightCircle className="h-4 w-4" /> {t.moveNext}
                             </DropdownMenuItem>
                             <DropdownMenuItem variant="destructive" onClick={() => requestDelete(row)}>
-                              <Trash2 className="h-4 w-4" /> Usuń
+                              <Trash2 className="h-4 w-4" /> {t.del}
                             </DropdownMenuItem>
                           </DropdownMenuContent>
                         </DropdownMenu>
@@ -213,7 +218,7 @@ export function TransactionGroupList({
       <ScopeDialog
         open={!!deleteTarget}
         onOpenChange={(open) => !open && setDeleteTarget(null)}
-        title="Usuń płatność cykliczną"
+        title={t.scopeDelTitle}
         onPick={pickDeleteScope}
       />
     </>

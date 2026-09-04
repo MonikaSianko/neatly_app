@@ -8,6 +8,8 @@ import { saveDraftRows, type DraftRowInput } from "@/lib/actions/drafts";
 import { createClient } from "@/lib/supabase/client";
 import { money, shortDate, parseAmountToCents } from "@/lib/format";
 import type { RecurrencePattern } from "@/lib/actions/recurring";
+import { useLocale } from "@/components/locale-provider";
+import { categoryDisplayName } from "@/lib/i18n";
 
 type Category = { id: string; name: string; emoji: string; color: string; kind: "expense" | "income" };
 
@@ -55,6 +57,7 @@ export function UpcomingTable({
   defaultDate: string;
 }) {
   const router = useRouter();
+  const { locale, t } = useLocale();
   const [drafts, setDrafts] = useState<DraftRow[]>([]);
   const [recIdx, setRecIdx] = useState<number | null>(null);
   const [overrides, setOverrides] = useState<Record<string, boolean>>({});
@@ -166,9 +169,7 @@ export function UpcomingTable({
       <div className="overflow-x-auto rounded-[14px] border border-border bg-card">
         <div className="min-w-[660px]">
           {rows.length === 0 && drafts.length === 0 && (
-            <div className="px-4 py-10 text-center text-sm text-muted-foreground">
-              Nic nie czeka na opłacenie w tym miesiącu.
-            </div>
+            <div className="px-4 py-10 text-center text-sm text-muted-foreground">{t.noUpcoming}</div>
           )}
 
           {visibleRows.map((row, i) => {
@@ -191,18 +192,18 @@ export function UpcomingTable({
                 </span>
                 <span className="flex min-w-0 items-center gap-1.5 truncate text-muted-foreground">
                   <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: cat?.color }} />
-                  {cat?.name}
+                  {cat ? categoryDisplayName(cat.name, locale) : ""}
                 </span>
                 <span className="text-xs" style={{ color: late ? "var(--destructive)" : "var(--muted-foreground)" }}>
-                  {shortDate(row.date)}
-                  {late && " zaległe"}
+                  {shortDate(row.date, locale)}
+                  {late && ` ${t.overdue}`}
                 </span>
-                <span className="tabular text-right font-medium">{money(row.amount_cents)}</span>
+                <span className="tabular text-right font-medium">{money(row.amount_cents, locale)}</span>
                 <button
                   type="button"
                   onClick={() => togglePaid(row)}
                   className="mx-auto flex h-5 w-5 items-center justify-center rounded-[6px] border border-border"
-                  aria-label="Opłacone"
+                  aria-label={row.kind === "income" ? t.received : t.paid}
                 />
               </div>
             );
@@ -237,7 +238,7 @@ export function UpcomingTable({
                     onPaste={(e) => onPaste(e, i)}
                     onChange={(e) => update(i, { title: e.target.value })}
                     onKeyDown={(e) => onKeyDown(e, i, isLast)}
-                    className="w-full min-w-0 bg-transparent text-sm outline-none"
+                    className="w-full min-w-0 rounded-sm bg-transparent text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
                   />
                   {cyclic && <Repeat className="h-3.5 w-3.5 shrink-0 text-primary" />}
                 </div>
@@ -247,11 +248,11 @@ export function UpcomingTable({
                   <select
                     value={r.categoryId}
                     onChange={(e) => update(i, { categoryId: e.target.value })}
-                    className="w-full min-w-0 bg-transparent text-sm outline-none"
+                    className="w-full min-w-0 rounded-sm bg-transparent text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
                   >
                     {catsOf(r.kind).map((c) => (
                       <option key={c.id} value={c.id}>
-                        {c.emoji} {c.name}
+                        {c.emoji} {categoryDisplayName(c.name, locale)}
                       </option>
                     ))}
                   </select>
@@ -261,7 +262,7 @@ export function UpcomingTable({
                   type="date"
                   value={r.date}
                   onChange={(e) => update(i, { date: e.target.value })}
-                  className="w-full bg-transparent text-xs outline-none"
+                  className="w-full rounded-sm bg-transparent text-xs outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 />
 
                 <input
@@ -270,7 +271,7 @@ export function UpcomingTable({
                   inputMode="decimal"
                   onChange={(e) => update(i, { amount: e.target.value })}
                   onKeyDown={(e) => onKeyDown(e, i, isLast)}
-                  className="tabular w-full bg-transparent text-right text-sm outline-none"
+                  className="tabular w-full rounded-sm bg-transparent text-right text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 />
 
                 <button
@@ -291,11 +292,11 @@ export function UpcomingTable({
                     onClick={() => setRecIdx(i)}
                     className="rounded-md p-1"
                     style={cyclic ? { color: "var(--primary)", background: "var(--neatly-primary-soft)" } : { color: "var(--muted-foreground)" }}
-                    aria-label="Cykliczność"
+                    aria-label={t.recurrence}
                   >
                     <MoreVertical className="h-3.5 w-3.5" />
                   </button>
-                  <button type="button" onClick={() => removeRow(i)} className="p-1 text-muted-foreground" aria-label="Usuń wiersz">
+                  <button type="button" onClick={() => removeRow(i)} className="p-1 text-muted-foreground" aria-label={t.clearRow}>
                     <X className="h-3.5 w-3.5" />
                   </button>
                 </div>
@@ -305,8 +306,8 @@ export function UpcomingTable({
 
           {rows.length > 0 && drafts.length === 0 && (
             <div className="flex items-center justify-between border-t border-border bg-muted px-4 py-2.5 text-sm">
-              <span className="font-medium">{visibleRows.length} poz.</span>
-              <span className="tabular font-medium">suma netto {money(netTotal)}</span>
+              <span className="font-medium">{visibleRows.length} {t.rows}</span>
+              <span className="tabular font-medium">{t.netTotal} {money(netTotal, locale)}</span>
             </div>
           )}
         </div>
@@ -314,20 +315,20 @@ export function UpcomingTable({
 
       <div className="mt-2 flex flex-wrap items-center gap-3">
         <button type="button" onClick={addRow} className="flex items-center gap-1.5 text-sm" style={{ color: "var(--neatly-primary-dark)" }}>
-          <Plus className="h-3.5 w-3.5" /> Dodaj wiersz
+          <Plus className="h-3.5 w-3.5" /> {t.addRow}
         </button>
         {drafts.length > 0 && (
           <>
             <div className="flex-1" />
             <span className="text-sm text-muted-foreground">
-              {filled.length} poz. · <span className="tabular text-foreground">{money(draftTotal)}</span>
+              {filled.length} {t.rows} · <span className="tabular text-foreground">{money(draftTotal, locale)}</span>
             </span>
             <button
               type="button"
               onClick={() => setDrafts([])}
               className="rounded-[10px] border border-border px-3 py-1.5 text-sm font-medium hover:bg-muted"
             >
-              Anuluj
+              {t.cancel}
             </button>
             <button
               type="button"
@@ -336,16 +337,12 @@ export function UpcomingTable({
               className="rounded-[10px] px-4 py-1.5 text-sm font-medium text-primary-foreground disabled:opacity-50"
               style={{ background: "var(--primary)" }}
             >
-              Zapisz wszystko
+              {t.saveAll}
             </button>
           </>
         )}
       </div>
-      {drafts.length > 0 && (
-        <p className="mt-2 text-xs text-muted-foreground">
-          Wklej dane z arkusza albo wpisz ręcznie. Enter dodaje kolejny wiersz, data i kategoria kopiują się z poprzedniego.
-        </p>
-      )}
+      {drafts.length > 0 && <p className="mt-2 text-xs text-muted-foreground">{t.quickHint}</p>}
       {error && <p className="mt-2 text-xs" style={{ color: "var(--destructive)" }}>{error}</p>}
 
       {recIdx !== null && drafts[recIdx] && (

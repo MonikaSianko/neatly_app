@@ -1,16 +1,20 @@
-/** Grosze -> "1 234,56 zł" (pl-PL). */
-export function money(amountCents: number): string {
-  return new Intl.NumberFormat("pl-PL", {
+import type { Locale } from "./i18n";
+
+const INTL_LOCALE: Record<Locale, string> = { pl: "pl-PL", en: "en-GB" };
+
+/** Grosze -> "1 234,56 zł" (wg locale, waluta zawsze PLN). */
+export function money(amountCents: number, locale: Locale = "pl"): string {
+  return new Intl.NumberFormat(INTL_LOCALE[locale], {
     style: "currency",
     currency: "PLN",
     minimumFractionDigits: 2,
   }).format(amountCents / 100);
 }
 
-/** "2026-09-05" -> "5 wrz" */
-export function shortDate(iso: string): string {
+/** "2026-09-05" -> "5 wrz" / "5 Sep" */
+export function shortDate(iso: string, locale: Locale = "pl"): string {
   const [y, m, d] = iso.split("-").map(Number);
-  return new Intl.DateTimeFormat("pl-PL", { day: "numeric", month: "short" }).format(new Date(y, m - 1, d));
+  return new Intl.DateTimeFormat(INTL_LOCALE[locale], { day: "numeric", month: "short" }).format(new Date(y, m - 1, d));
 }
 
 /** Parsuje wpisana kwote ("1 234,56" / "1234.56") na grosze. */

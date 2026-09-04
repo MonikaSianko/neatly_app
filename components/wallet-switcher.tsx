@@ -18,6 +18,7 @@ import {
 } from "@/components/ui/sheet";
 import { EmojiPicker } from "@/components/emoji-picker";
 import { createWallet } from "@/lib/actions/wallets";
+import { useLocale } from "@/components/locale-provider";
 
 type Wallet = { id: string; name: string; emoji: string | null };
 
@@ -33,6 +34,7 @@ export function WalletSwitcher({
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
+  const { t } = useLocale();
   const active = wallets.find((w) => w.id === activeWalletId);
 
   const [creating, setCreating] = useState(false);
@@ -87,7 +89,7 @@ export function WalletSwitcher({
           <DropdownMenuSeparator />
           <DropdownMenuItem onClick={() => setCreating(true)}>
             <Plus className="h-4 w-4" />
-            Nowy portfel
+            {t.newWallet}
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
@@ -95,11 +97,11 @@ export function WalletSwitcher({
       <Sheet open={creating} onOpenChange={setCreating}>
         <SheetContent>
           <SheetHeader>
-            <SheetTitle>Nowy portfel</SheetTitle>
+            <SheetTitle>{t.newWallet}</SheetTitle>
           </SheetHeader>
           <form onSubmit={submitCreate} className="flex flex-col gap-4 px-4 pb-4">
             <div>
-              <label className="mb-1.5 block text-sm font-medium">Nazwa</label>
+              <label className="mb-1.5 block text-sm font-medium">{t.walletName}</label>
               <input
                 autoFocus
                 value={name}
@@ -109,7 +111,7 @@ export function WalletSwitcher({
               />
             </div>
             <div>
-              <label className="mb-1.5 block text-sm font-medium">Ikona</label>
+              <label className="mb-1.5 block text-sm font-medium">{t.icon}</label>
               <EmojiPicker value={emoji} onChange={setEmoji} />
             </div>
             {error && <p className="text-xs" style={{ color: "var(--destructive)" }}>{error}</p>}
@@ -119,7 +121,7 @@ export function WalletSwitcher({
               className="rounded-[10px] px-4 py-2.5 text-sm font-medium text-primary-foreground disabled:opacity-50"
               style={{ background: "var(--primary)" }}
             >
-              Utwórz portfel
+              {t.createWallet}
             </button>
           </form>
         </SheetContent>

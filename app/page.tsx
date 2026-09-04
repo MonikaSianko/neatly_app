@@ -13,12 +13,7 @@ import { parseMonthParam, monthRange, isoToday } from "@/lib/month";
 import { computeSummary, categorySpent } from "@/lib/summary";
 import { money } from "@/lib/format";
 import { ensureMonthMaterialized } from "@/lib/materialize";
-
-const TABS = [
-  { key: "upcoming", label: "Nadchodzące" },
-  { key: "expense", label: "Wydatki" },
-  { key: "income", label: "Przychody" },
-] as const;
+import { t as translate, type Locale } from "@/lib/i18n";
 
 export default async function Home({
   searchParams,
@@ -33,12 +28,14 @@ export default async function Home({
 
   const { data: profile } = await supabase
     .from("profiles")
-    .select("active_household_id")
+    .select("active_household_id, locale")
     .eq("user_id", user.id)
     .single();
 
   const householdId = profile?.active_household_id;
   if (!householdId) redirect("/household");
+  const locale: Locale = profile?.locale === "en" ? "en" : "pl";
+  const dict = translate(locale);
 
   const [{ data: wallets }, { data: categories }] = await Promise.all([
     supabase
@@ -152,6 +149,12 @@ export default async function Home({
     return `/?${p.toString()}`;
   };
 
+  const TABS = [
+    { key: "upcoming", label: dict.upcoming },
+    { key: "expense", label: dict.expenses },
+    { key: "income", label: dict.income },
+  ] as const;
+
   const expenseCategories = (categories ?? []).filter((c) => c.kind === "expense" && !c.is_archived);
   const upcomingRows = monthTx
     .filter((t) => !t.is_paid)
@@ -178,27 +181,27 @@ export default async function Home({
               </div>
               <div className="mt-3 grid grid-cols-2 gap-3">
                 <div>
-                  <div className="text-[11px] text-muted-foreground">Przychody</div>
-                  <div className="tabular text-[18px] font-semibold">{money(summary.income)}</div>
+                  <div className="text-[11px] text-muted-foreground">{dict.income}</div>
+                  <div className="tabular text-[18px] font-semibold">{money(summary.income, locale)}</div>
                 </div>
                 <div>
-                  <div className="text-[11px] text-muted-foreground">Wydatki</div>
-                  <div className="tabular text-[18px] font-semibold">{money(summary.expenses)}</div>
+                  <div className="text-[11px] text-muted-foreground">{dict.expenses}</div>
+                  <div className="tabular text-[18px] font-semibold">{money(summary.expenses, locale)}</div>
                 </div>
                 <div>
-                  <div className="text-[11px] text-muted-foreground">Balans miesiąca</div>
+                  <div className="text-[11px] text-muted-foreground">{dict.balance}</div>
                   <div className="tabular text-[18px] font-semibold" style={{ color: "var(--neatly-primary-dark)" }}>
-                    {money(summary.balance)}
+                    {money(summary.balance, locale)}
                   </div>
                 </div>
                 <div>
-                  <div className="text-[11px] text-muted-foreground">Faktyczny balans</div>
-                  <div className="tabular text-[18px] font-semibold">{money(summary.actual)}</div>
+                  <div className="text-[11px] text-muted-foreground">{dict.actualBalance}</div>
+                  <div className="tabular text-[18px] font-semibold">{money(summary.actual, locale)}</div>
                 </div>
               </div>
               <div className="mt-3 flex items-center justify-between border-t border-border pt-3 text-sm">
-                <span className="text-muted-foreground">Stan konta na koniec miesiąca</span>
-                <span className="tabular font-semibold">{money(summary.closing)}</span>
+                <span className="text-muted-foreground">{dict.closing}</span>
+                <span className="tabular font-semibold">{money(summary.closing, locale)}</span>
               </div>
             </section>
 

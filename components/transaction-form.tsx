@@ -13,6 +13,8 @@ import {
 } from "@/lib/actions/recurring";
 import { ScopeDialog, type Scope } from "@/components/scope-dialog";
 import { parseAmountToCents } from "@/lib/format";
+import { useLocale } from "@/components/locale-provider";
+import { WEEKDAYS, categoryDisplayName } from "@/lib/i18n";
 
 type Category = { id: string; name: string; emoji: string; kind: "expense" | "income" };
 
@@ -34,8 +36,6 @@ export type EditingTransaction = {
   recurringRuleId: string | null;
   rule?: EditingRule | null;
 };
-
-const WEEKDAY_LABELS = ["pon", "wt", "śr", "czw", "pt", "sob", "nd"];
 
 type RepeatPreset = "never" | "day" | "week" | "weekdays" | "biweek" | "month" | "year" | "custom";
 
@@ -67,11 +67,12 @@ export function TransactionForm({
   defaultDate: string;
   editing?: EditingTransaction | null;
 }) {
+  const { t } = useLocale();
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent className="sm:max-w-md">
         <SheetHeader>
-          <SheetTitle>{editing ? "Edytuj pozycję" : "Nowa pozycja"}</SheetTitle>
+          <SheetTitle>{editing ? t.editEntry : t.newEntry}</SheetTitle>
         </SheetHeader>
         {open && (
           <TransactionFormFields
@@ -105,6 +106,8 @@ function TransactionFormFields({
   editing?: EditingTransaction | null;
 }) {
   const router = useRouter();
+  const { locale, t } = useLocale();
+  const weekdayLabels = WEEKDAYS[locale];
   const [kind, setKind] = useState<"expense" | "income">(editing?.kind ?? "expense");
   const [amount, setAmount] = useState(editing ? (editing.amountCents / 100).toFixed(2).replace(".", ",") : "");
   const [title, setTitle] = useState(editing?.title ?? "");
@@ -160,12 +163,8 @@ function TransactionFormFields({
   function submit(e: React.FormEvent) {
     e.preventDefault();
     const amountCents = parseAmountToCents(amount);
-    if (!amountCents) {
-      setError("Podaj kwotę.");
-      return;
-    }
-    if (!categoryId) {
-      setError("Wybierz kategorię.");
+    if (!amountCents || !categoryId) {
+      setError(t.pickCatAmount);
       return;
     }
 
@@ -232,7 +231,7 @@ function TransactionFormFields({
             onClick={() => setKind("expense")}
             className="rounded-full p-2"
             style={kind === "expense" ? { background: "var(--neatly-danger-soft)", color: "var(--destructive)" } : { color: "var(--muted-foreground)" }}
-            aria-label="Wydatek"
+            aria-label={t.expense}
           >
             <Minus className="h-5 w-5" />
           </button>
@@ -249,14 +248,14 @@ function TransactionFormFields({
             onClick={() => setKind("income")}
             className="rounded-full p-2"
             style={kind === "income" ? { background: "var(--neatly-primary-soft)", color: "var(--neatly-primary-dark)" } : { color: "var(--muted-foreground)" }}
-            aria-label="Przychód"
+            aria-label={t.incomeOne}
           >
             <Plus className="h-5 w-5" />
           </button>
         </div>
 
         <div>
-          <label className="mb-1.5 block text-sm font-medium">Tytuł</label>
+          <label className="mb-1.5 block text-sm font-medium">{t.title}</label>
           <input
             value={title}
             onChange={(e) => setTitle(e.target.value)}
@@ -265,23 +264,23 @@ function TransactionFormFields({
         </div>
 
         <div>
-          <label className="mb-1.5 block text-sm font-medium">Kategoria</label>
+          <label className="mb-1.5 block text-sm font-medium">{t.category}</label>
           <select
             value={categoryId}
             onChange={(e) => setCategoryId(e.target.value)}
             className="w-full rounded-[10px] border border-border bg-muted px-3 py-2 text-sm"
           >
-            <option value="">Wybierz kategorię</option>
+            <option value="">{t.category}</option>
             {filteredCategories.map((c) => (
               <option key={c.id} value={c.id}>
-                {c.emoji} {c.name}
+                {c.emoji} {categoryDisplayName(c.name, locale)}
               </option>
             ))}
           </select>
         </div>
 
         <div>
-          <label className="mb-1.5 block text-sm font-medium">Data</label>
+          <label className="mb-1.5 block text-sm font-medium">{t.date}</label>
           <input
             type="date"
             value={date}
@@ -291,26 +290,26 @@ function TransactionFormFields({
         </div>
 
         <div>
-          <label className="mb-1.5 block text-sm font-medium">Powtarzaj</label>
+          <label className="mb-1.5 block text-sm font-medium">{t.repeat}</label>
           <select
             value={repeat}
             onChange={(e) => setRepeat(e.target.value as RepeatPreset)}
             className="w-full rounded-[10px] border border-border bg-muted px-3 py-2 text-sm"
           >
-            <option value="never">Nigdy</option>
-            <option value="day">Codziennie</option>
-            <option value="week">Co tydzień</option>
-            <option value="weekdays">Wybrane dni tygodnia</option>
-            <option value="biweek">Co dwa tygodnie</option>
-            <option value="month">Co miesiąc</option>
-            <option value="year">Co rok</option>
-            <option value="custom">Niestandardowo</option>
+            <option value="never">{t.never}</option>
+            <option value="day">{t.daily}</option>
+            <option value="week">{t.weekly}</option>
+            <option value="weekdays">{t.pickedDays}</option>
+            <option value="biweek">{t.biweekly}</option>
+            <option value="month">{t.monthly}</option>
+            <option value="year">{t.yearly}</option>
+            <option value="custom">{t.custom}</option>
           </select>
         </div>
 
         {repeat === "weekdays" && (
           <div className="flex flex-wrap gap-1.5">
-            {WEEKDAY_LABELS.map((label, i) => {
+            {weekdayLabels.map((label, i) => {
               const d = i + 1;
               const active = weekdays.includes(d);
               return (
@@ -331,7 +330,6 @@ function TransactionFormFields({
         {repeat === "custom" && (
           <div className="flex items-end gap-2">
             <div>
-              <label className="mb-1.5 block text-sm font-medium">Co</label>
               <input
                 type="number"
                 min={1}
@@ -345,17 +343,17 @@ function TransactionFormFields({
               onChange={(e) => setCustomFreq(e.target.value as typeof customFreq)}
               className="flex-1 rounded-[10px] border border-border bg-muted px-3 py-2 text-sm"
             >
-              <option value="day">dni</option>
-              <option value="week">tygodni</option>
-              <option value="month">miesięcy</option>
-              <option value="year">lat</option>
+              <option value="day">{t.daily}</option>
+              <option value="week">{t.weekly}</option>
+              <option value="month">{t.monthly}</option>
+              <option value="year">{t.yearly}</option>
             </select>
           </div>
         )}
 
         {repeat === "custom" && customFreq === "week" && (
           <div className="flex flex-wrap gap-1.5">
-            {WEEKDAY_LABELS.map((label, i) => {
+            {weekdayLabels.map((label, i) => {
               const d = i + 1;
               const active = weekdays.includes(d);
               return (
@@ -375,15 +373,15 @@ function TransactionFormFields({
 
         {repeat !== "never" && (
           <div>
-            <label className="mb-1.5 block text-sm font-medium">Do kiedy</label>
+            <label className="mb-1.5 block text-sm font-medium">{t.until}</label>
             <div className="flex gap-2">
               <select
                 value={untilMode}
                 onChange={(e) => setUntilMode(e.target.value as "never" | "date")}
                 className="rounded-[10px] border border-border bg-muted px-3 py-2 text-sm"
               >
-                <option value="never">Bez końca</option>
-                <option value="date">Do dnia</option>
+                <option value="never">{t.noEnd}</option>
+                <option value="date">{t.untilDay}</option>
               </select>
               {untilMode === "date" && (
                 <input
@@ -404,7 +402,7 @@ function TransactionFormFields({
             onChange={(e) => setIsPaid(e.target.checked)}
             className="h-4 w-4 rounded-[6px]"
           />
-          {kind === "income" ? "Otrzymane" : "Opłacone"}
+          {kind === "income" ? t.received : t.paid}
         </label>
 
         {error && <p className="text-xs" style={{ color: "var(--destructive)" }}>{error}</p>}
@@ -415,11 +413,11 @@ function TransactionFormFields({
           className="rounded-[10px] px-4 py-2.5 text-sm font-medium text-primary-foreground disabled:opacity-50"
           style={{ background: "var(--primary)" }}
         >
-          Zapisz
+          {t.save}
         </button>
       </form>
 
-      <ScopeDialog open={scopeOpen} onOpenChange={setScopeOpen} title="Zapisz zmianę" onPick={pickScope} />
+      <ScopeDialog open={scopeOpen} onOpenChange={setScopeOpen} title={t.scopeEditTitle} onPick={pickScope} />
     </>
   );
 }

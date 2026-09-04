@@ -4,13 +4,15 @@ import { useState } from "react";
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { type YearMonth, monthKey, monthLabel, shiftMonth } from "@/lib/month";
+import { useLocale } from "@/components/locale-provider";
 
-const MONTH_SHORT_PL = ["sty", "lut", "mar", "kwi", "maj", "cze", "lip", "sie", "wrz", "paź", "lis", "gru"];
+const INTL_LOCALE = { pl: "pl-PL", en: "en-GB" } as const;
 
 export function MonthNav({ ym }: { ym: YearMonth }) {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
+  const { locale } = useLocale();
   const [open, setOpen] = useState(false);
   const [pickerYear, setPickerYear] = useState(ym.y);
 
@@ -19,6 +21,9 @@ export function MonthNav({ ym }: { ym: YearMonth }) {
     params.set("month", monthKey(next));
     router.push(`${pathname}?${params.toString()}`);
   }
+
+  const monthShort = (i: number) =>
+    new Intl.DateTimeFormat(INTL_LOCALE[locale], { month: "short" }).format(new Date(2026, i, 1));
 
   return (
     <div className="relative flex items-center justify-center gap-0.5">
@@ -38,7 +43,7 @@ export function MonthNav({ ym }: { ym: YearMonth }) {
         }}
         className="min-w-[7rem] rounded-[10px] px-2 py-1 text-center text-sm font-medium capitalize hover:bg-muted"
       >
-        {monthLabel(ym)}
+        {monthLabel(ym, locale)}
       </button>
       <button
         type="button"
@@ -61,11 +66,11 @@ export function MonthNav({ ym }: { ym: YearMonth }) {
             </button>
           </div>
           <div className="grid grid-cols-3 gap-1">
-            {MONTH_SHORT_PL.map((label, i) => {
+            {Array.from({ length: 12 }, (_, i) => {
               const active = ym.y === pickerYear && ym.m === i + 1;
               return (
                 <button
-                  key={label}
+                  key={i}
                   type="button"
                   onClick={() => {
                     go({ y: pickerYear, m: i + 1 });
@@ -74,7 +79,7 @@ export function MonthNav({ ym }: { ym: YearMonth }) {
                   className="rounded-[10px] py-2 text-sm capitalize"
                   style={active ? { background: "var(--primary)", color: "var(--primary-foreground)" } : undefined}
                 >
-                  {label}
+                  {monthShort(i)}
                 </button>
               );
             })}

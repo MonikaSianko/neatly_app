@@ -51,13 +51,10 @@ export function addMonthsClamped(iso: string, k: number): string {
   return `${ny}-${pad(nm)}-${pad(Math.min(day, daysInMonth(ny, nm)))}`;
 }
 
-const MONTH_NAMES_PL = [
-  "styczeń", "luty", "marzec", "kwiecień", "maj", "czerwiec",
-  "lipiec", "sierpień", "wrzesień", "październik", "listopad", "grudzień",
-];
+const INTL_LOCALE: Record<"pl" | "en", string> = { pl: "pl-PL", en: "en-GB" };
 
-export function monthLabel({ y, m }: YearMonth): string {
-  return `${MONTH_NAMES_PL[m - 1]} ${y}`;
+export function monthLabel({ y, m }: YearMonth, locale: "pl" | "en" = "pl"): string {
+  return new Intl.DateTimeFormat(INTL_LOCALE[locale], { month: "long", year: "numeric" }).format(new Date(y, m - 1, 1));
 }
 
 export function isoToday(): string {

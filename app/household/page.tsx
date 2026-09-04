@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { RenameForm } from "@/components/household/rename-form";
 import { InvitePanel } from "@/components/household/invite-panel";
+import { t as translate, type Locale } from "@/lib/i18n";
 
 export default async function HouseholdPage() {
   const supabase = await createClient();
@@ -13,12 +14,14 @@ export default async function HouseholdPage() {
 
   const { data: profile } = await supabase
     .from("profiles")
-    .select("active_household_id")
+    .select("active_household_id, locale")
     .eq("user_id", user.id)
     .single();
 
   const householdId = profile?.active_household_id;
   if (!householdId) redirect("/");
+  const locale: Locale = profile?.locale === "en" ? "en" : "pl";
+  const dict = translate(locale);
 
   const { data: household } = await supabase
     .from("households")
@@ -51,15 +54,15 @@ export default async function HouseholdPage() {
 
   return (
     <main className="mx-auto flex w-full max-w-lg flex-1 flex-col gap-6 p-4 md:p-6">
-      <h1 className="text-lg font-semibold">Gospodarstwo domowe</h1>
+      <h1 className="text-lg font-semibold">{dict.household}</h1>
 
       <section className="flex flex-col gap-2">
-        <h2 className="text-sm font-medium text-muted-foreground">Nazwa</h2>
+        <h2 className="text-sm font-medium text-muted-foreground">{dict.walletName}</h2>
         <RenameForm householdId={household.id} initialName={household.name} />
       </section>
 
       <section className="flex flex-col gap-2">
-        <h2 className="text-sm font-medium text-muted-foreground">Członkowie</h2>
+        <h2 className="text-sm font-medium text-muted-foreground">{dict.members}</h2>
         <div className="rounded-[14px] border border-border bg-card">
           {(members ?? []).map((member, i) => {
             const p = memberProfiles?.find((mp) => mp.user_id === member.user_id);
@@ -75,7 +78,7 @@ export default async function HouseholdPage() {
                   <div className="text-[11px] text-muted-foreground">{p?.email}</div>
                 </div>
                 <span className="text-xs text-muted-foreground">
-                  {member.role === "owner" ? "właściciel" : "członek"}
+                  {member.role === "owner" ? dict.owner : dict.member}
                 </span>
               </div>
             );
@@ -84,7 +87,7 @@ export default async function HouseholdPage() {
       </section>
 
       <section className="flex flex-col gap-2">
-        <h2 className="text-sm font-medium text-muted-foreground">Kod zaproszenia</h2>
+        <h2 className="text-sm font-medium text-muted-foreground">{dict.inviteCode}</h2>
         <InvitePanel householdId={household.id} initialInvite={pendingInvite ?? null} />
       </section>
     </main>
