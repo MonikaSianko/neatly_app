@@ -4,19 +4,17 @@ import { Header } from "@/components/header";
 import { SwipeMonth } from "@/components/swipe-month";
 import { TransactionGroupList, type TxGroup, type TxRow } from "@/components/transaction-group-list";
 import { FabAddButton } from "@/components/fab-add-button";
+import { BudgetTiles, type BudgetRow } from "@/components/budget-tiles";
+import { OpeningBalance } from "@/components/opening-balance";
 import { createClient } from "@/lib/supabase/server";
 import { parseMonthParam, monthRange, isoToday } from "@/lib/month";
+import { computeSummary, categorySpent } from "@/lib/summary";
 import { money } from "@/lib/format";
 
 const TABS = [
   { key: "upcoming", label: "Nadchodzące" },
   { key: "expense", label: "Wydatki" },
   { key: "income", label: "Przychody" },
-] as const;
-
-const BUDGET_TILES = [
-  { emoji: "🛒", name: "Zakupy spożywcze", color: "var(--neatly-cat-01)", spent: 1240, limit: 2500 },
-  { emoji: "🚗", name: "Samochód", color: "var(--neatly-cat-16)", spent: 640, limit: 500 },
 ] as const;
 
 export default async function Home({
@@ -58,25 +56,50 @@ export default async function Home({
     (params.wallet && wallets?.some((w) => w.id === params.wallet) ? params.wallet : wallets?.[0]?.id) ?? "";
   const ym = parseMonthParam(params.month);
   const range = monthRange(ym);
+  const monthDate = `${range.from.slice(0, 7)}-01`;
   const activeTab = (["upcoming", "expense", "income"] as const).includes(params.tab as never)
     ? (params.tab as "upcoming" | "expense" | "income")
     : "expense";
 
-  const { data: transactions } = await supabase
-    .from("transactions")
-    .select("id, kind, title, amount_cents, category_id, date, is_paid, recurring_rule_id")
-    .eq("household_id", householdId)
-    .eq("wallet_id", activeWalletId)
-    .gte("date", range.from)
-    .lte("date", range.to);
+  const [{ data: transactions }, { data: budgets }, { data: opening }] = await Promise.all([
+    supabase
+      .from("transactions")
+      .select("id, kind, title, amount_cents, category_id, date, is_paid, recurring_rule_id")
+      .eq("household_id", householdId)
+      .eq("wallet_id", activeWalletId)
+      .gte("date", range.from)
+      .lte("date", range.to),
+    supabase
+      .from("category_budgets")
+      .select("id, category_id, amount_cents")
+      .eq("household_id", householdId)
+      .eq("wallet_id", activeWalletId)
+      .eq("month", monthDate),
+    supabase
+      .from("month_openings")
+      .select("amount_cents")
+      .eq("household_id", householdId)
+      .eq("wallet_id", activeWalletId)
+      .eq("month", monthDate)
+      .maybeSingle(),
+  ]);
 
   const monthTx = transactions ?? [];
-  const income = monthTx.filter((x) => x.kind === "income").reduce((s, x) => s + x.amount_cents, 0);
-  const expenses = monthTx.filter((x) => x.kind === "expense").reduce((s, x) => s + x.amount_cents, 0);
-  const balance = income - expenses;
-  const paidIn = monthTx.filter((x) => x.kind === "income" && x.is_paid).reduce((s, x) => s + x.amount_cents, 0);
-  const paidOut = monthTx.filter((x) => x.kind === "expense" && x.is_paid).reduce((s, x) => s + x.amount_cents, 0);
-  const actual = paidIn - paidOut;
+  const monthBudgets = budgets ?? [];
+  const openingCents = opening?.amount_cents ?? 0;
+
+  const summary = computeSummary(
+    monthTx.map((t) => ({ kind: t.kind, amount_cents: t.amount_cents, is_paid: t.is_paid, category_id: t.category_id })),
+    monthBudgets.map((b) => ({ category_id: b.category_id, amount_cents: b.amount_cents })),
+    openingCents
+  );
+
+  const budgetRows: BudgetRow[] = monthBudgets.map((b) => ({
+    id: b.id,
+    categoryId: b.category_id,
+    limitCents: b.amount_cents,
+    spentCents: categorySpent(monthTx, b.category_id),
+  }));
 
   const categoryById = new Map((categories ?? []).map((c) => [c.id, c]));
   const groupsFor = (kind: "expense" | "income"): TxGroup[] => {
@@ -111,6 +134,8 @@ export default async function Home({
     return `/?${p.toString()}`;
   };
 
+  const expenseCategories = (categories ?? []).filter((c) => c.kind === "expense" && !c.is_archived);
+
   return (
     <>
       <Header
@@ -128,70 +153,41 @@ export default async function Home({
           <aside className="order-1 flex flex-col gap-4 md:order-2">
             <section className="rounded-[14px] border border-border bg-card p-4">
               <div className="flex items-center justify-between text-sm">
-                <span className="text-muted-foreground">Stan początkowy</span>
-                <span className="tabular font-medium">{money(0)}</span>
+                <OpeningBalance householdId={householdId} walletId={activeWalletId} ym={ym} openingCents={openingCents} />
               </div>
               <div className="mt-3 grid grid-cols-2 gap-3">
                 <div>
                   <div className="text-[11px] text-muted-foreground">Przychody</div>
-                  <div className="tabular text-[18px] font-semibold">{money(income)}</div>
+                  <div className="tabular text-[18px] font-semibold">{money(summary.income)}</div>
                 </div>
                 <div>
                   <div className="text-[11px] text-muted-foreground">Wydatki</div>
-                  <div className="tabular text-[18px] font-semibold">{money(expenses)}</div>
+                  <div className="tabular text-[18px] font-semibold">{money(summary.expenses)}</div>
                 </div>
                 <div>
                   <div className="text-[11px] text-muted-foreground">Balans miesiąca</div>
                   <div className="tabular text-[18px] font-semibold" style={{ color: "var(--neatly-primary-dark)" }}>
-                    {money(balance)}
+                    {money(summary.balance)}
                   </div>
                 </div>
                 <div>
                   <div className="text-[11px] text-muted-foreground">Faktyczny balans</div>
-                  <div className="tabular text-[18px] font-semibold">{money(actual)}</div>
+                  <div className="tabular text-[18px] font-semibold">{money(summary.actual)}</div>
                 </div>
               </div>
               <div className="mt-3 flex items-center justify-between border-t border-border pt-3 text-sm">
                 <span className="text-muted-foreground">Stan konta na koniec miesiąca</span>
-                <span className="tabular font-semibold">{money(actual)}</span>
+                <span className="tabular font-semibold">{money(summary.closing)}</span>
               </div>
             </section>
 
-            <section className="rounded-[14px] border border-border bg-card p-4">
-              <div className="mb-3 flex items-center justify-between">
-                <h2 className="text-sm font-medium">Budżety wydatków</h2>
-                <button type="button" className="rounded-[10px] border border-border px-2.5 py-1 text-xs font-medium hover:bg-muted">
-                  Ustaw budżet
-                </button>
-              </div>
-              <div className="flex flex-col gap-3">
-                {BUDGET_TILES.map((tile) => {
-                  const pct = Math.min(100, Math.round((tile.spent / tile.limit) * 100));
-                  const over = tile.spent > tile.limit;
-                  return (
-                    <div key={tile.name} className="rounded-[10px] border border-border p-3">
-                      <div className="flex items-center justify-between text-sm">
-                        <span className="flex items-center gap-1.5 font-medium">
-                          <span aria-hidden>{tile.emoji}</span>
-                          {tile.name}
-                        </span>
-                        <span className="tabular text-xs text-muted-foreground">
-                          {tile.spent.toLocaleString("pl-PL")} / {tile.limit.toLocaleString("pl-PL")} zł
-                        </span>
-                      </div>
-                      <div className="mt-2 h-2 w-full rounded-full" style={{ background: "var(--neatly-primary-soft)" }}>
-                        <div className="h-2 rounded-full" style={{ width: `${pct}%`, background: tile.color }} />
-                      </div>
-                      <div className="mt-1 text-[11px]" style={{ color: over ? "var(--destructive)" : "var(--muted-foreground)" }}>
-                        {over
-                          ? `Przekroczono o ${(tile.spent - tile.limit).toLocaleString("pl-PL")} zł`
-                          : `Zostało ${(tile.limit - tile.spent).toLocaleString("pl-PL")} zł`}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </section>
+            <BudgetTiles
+              householdId={householdId}
+              walletId={activeWalletId}
+              ym={ym}
+              categories={expenseCategories}
+              rows={budgetRows}
+            />
           </aside>
 
           {/* Lewa kolumna: zakładki */}
