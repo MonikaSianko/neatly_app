@@ -1,7 +1,8 @@
-import { ChevronLeft, ChevronRight } from "lucide-react";
 import { UserMenu } from "@/components/user-menu";
 import { WalletSwitcher } from "@/components/wallet-switcher";
+import { MonthNav } from "@/components/month-nav";
 import type { Category } from "@/components/category-manager";
+import type { YearMonth } from "@/lib/month";
 
 type Wallet = { id: string; name: string; emoji: string | null };
 
@@ -11,12 +12,14 @@ export function Header({
   householdId,
   categories,
   email,
+  ym,
 }: {
   wallets: Wallet[];
   activeWalletId: string;
   householdId: string;
   categories: Category[];
   email: string | null;
+  ym: YearMonth;
 }) {
   return (
     <header className="sticky top-0 z-10 border-b border-border bg-background">
@@ -28,27 +31,8 @@ export function Header({
 
         <WalletSwitcher wallets={wallets} activeWalletId={activeWalletId} householdId={householdId} />
 
-        <div className="flex flex-1 items-center justify-center gap-0.5">
-          <button
-            type="button"
-            aria-label="Poprzedni miesiąc"
-            className="rounded-[10px] p-1.5 text-muted-foreground hover:bg-muted"
-          >
-            <ChevronLeft className="h-4 w-4" />
-          </button>
-          <button
-            type="button"
-            className="min-w-[7rem] rounded-[10px] px-2 py-1 text-center text-sm font-medium hover:bg-muted"
-          >
-            wrzesień 2026
-          </button>
-          <button
-            type="button"
-            aria-label="Następny miesiąc"
-            className="rounded-[10px] p-1.5 text-muted-foreground hover:bg-muted"
-          >
-            <ChevronRight className="h-4 w-4" />
-          </button>
+        <div className="flex flex-1 items-center justify-center">
+          <MonthNav ym={ym} />
         </div>
 
         <UserMenu email={email} householdId={householdId} categories={categories} />
