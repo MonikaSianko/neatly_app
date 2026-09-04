@@ -1,6 +1,7 @@
-import { ChevronDown, ChevronLeft, ChevronRight, UserRound } from "lucide-react";
+import { ChevronDown, ChevronLeft, ChevronRight } from "lucide-react";
+import { UserMenu } from "@/components/user-menu";
 
-export function Header() {
+export function Header({ walletName, email }: { walletName: string; email: string | null }) {
   return (
     <header className="sticky top-0 z-10 border-b border-border bg-background">
       <div className="mx-auto flex h-14 max-w-5xl items-center gap-2 px-4 sm:gap-3">
@@ -14,7 +15,7 @@ export function Header() {
           className="flex shrink-0 items-center gap-1 rounded-[10px] border border-border bg-card px-2.5 py-1.5 text-sm font-medium sm:px-3"
         >
           <span aria-hidden>💵</span>
-          <span className="hidden sm:inline">Płatności miesięczne</span>
+          <span className="hidden sm:inline">{walletName}</span>
           <ChevronDown className="h-4 w-4 text-muted-foreground" />
         </button>
 
@@ -41,13 +42,7 @@ export function Header() {
           </button>
         </div>
 
-        <button
-          type="button"
-          aria-label="Menu użytkownika"
-          className="shrink-0 rounded-full p-1.5 text-muted-foreground hover:bg-muted"
-        >
-          <UserRound className="h-5 w-5" />
-        </button>
+        <UserMenu email={email} />
       </div>
     </header>
   );

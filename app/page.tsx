@@ -1,5 +1,7 @@
+import { redirect } from "next/navigation";
 import { Plus } from "lucide-react";
 import { Header } from "@/components/header";
+import { createClient } from "@/lib/supabase/server";
 
 const TABS = [
   { label: "Nadchodzące", active: true },
@@ -18,10 +20,16 @@ const BUDGET_TILES = [
   { emoji: "🚗", name: "Samochód", color: "var(--neatly-cat-16)", spent: 640, limit: 500 },
 ] as const;
 
-export default function Home() {
+export default async function Home() {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) redirect("/login");
+
   return (
     <>
-      <Header />
+      <Header walletName="Płatności miesięczne" email={user.email ?? null} />
 
       <main className="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-4 p-4 md:grid md:grid-cols-[1fr_320px] md:items-start md:gap-6 md:p-6">
         {/* Prawa kolumna na mobile jest u góry */}
