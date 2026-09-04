@@ -4,6 +4,7 @@ import { Header } from "@/components/header";
 import { SwipeMonth } from "@/components/swipe-month";
 import { TransactionGroupList, type TxGroup, type TxRow } from "@/components/transaction-group-list";
 import type { EditingRule } from "@/components/transaction-form";
+import { UpcomingTable } from "@/components/upcoming-table";
 import { FabAddButton } from "@/components/fab-add-button";
 import { BudgetTiles, type BudgetRow } from "@/components/budget-tiles";
 import { OpeningBalance } from "@/components/opening-balance";
@@ -61,7 +62,7 @@ export default async function Home({
   const monthDate = `${range.from.slice(0, 7)}-01`;
   const activeTab = (["upcoming", "expense", "income"] as const).includes(params.tab as never)
     ? (params.tab as "upcoming" | "expense" | "income")
-    : "expense";
+    : "upcoming";
 
   if (activeWalletId) {
     await ensureMonthMaterialized(supabase, householdId, activeWalletId, ym);
@@ -152,6 +153,9 @@ export default async function Home({
   };
 
   const expenseCategories = (categories ?? []).filter((c) => c.kind === "expense" && !c.is_archived);
+  const upcomingRows = monthTx
+    .filter((t) => !t.is_paid)
+    .sort((a, b) => a.date.localeCompare(b.date) || a.title.localeCompare(b.title));
 
   return (
     <>
@@ -227,9 +231,14 @@ export default async function Home({
             </div>
 
             {activeTab === "upcoming" ? (
-              <div className="rounded-[14px] border border-border bg-card p-6 text-center text-sm text-muted-foreground">
-                Zakładka „Nadchodzące&rdquo; pojawi się w kolejnym etapie.
-              </div>
+              <UpcomingTable
+                rows={upcomingRows}
+                categories={categories ?? []}
+                householdId={householdId}
+                walletId={activeWalletId}
+                today={today}
+                defaultDate={defaultDate}
+              />
             ) : (
               <TransactionGroupList
                 groups={groupsFor(activeTab)}
