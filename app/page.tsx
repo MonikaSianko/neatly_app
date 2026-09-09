@@ -1,7 +1,6 @@
 import { Suspense } from "react";
 import { redirect } from "next/navigation";
 import { Header } from "@/components/header";
-import { SwipeMonth } from "@/components/swipe-month";
 import { MonthContent } from "@/components/month-content";
 import { MonthSkeleton } from "@/components/month-skeleton";
 import { FabAddButton } from "@/components/fab-add-button";
@@ -67,21 +66,19 @@ export default async function Home({
         ym={ym}
       />
 
-      <SwipeMonth ym={ym}>
-        <main className="mx-auto flex w-full max-w-[1600px] flex-1 flex-col gap-4 px-2 py-4 md:grid md:grid-cols-[1fr_320px] md:items-start md:gap-5 md:px-4 md:py-5">
-          {/* Klucz przelacza granice przy zmianie portfela/miesiaca, wiec szkielet pojawia sie od razu. */}
-          <Suspense key={`${activeWalletId}-${monthKey(ym)}`} fallback={<MonthSkeleton />}>
-            <MonthContent
-              householdId={householdId}
-              walletId={activeWalletId}
-              ym={ym}
-              locale={locale}
-              categories={categories ?? []}
-              activeTab={activeTab}
-            />
-          </Suspense>
-        </main>
-      </SwipeMonth>
+      <main className="mx-auto flex w-full max-w-[1600px] flex-1 flex-col gap-4 px-2 py-4 md:grid md:grid-cols-[1fr_320px] md:items-start md:gap-5 md:px-4 md:py-5">
+        {/* Klucz przelacza granice przy zmianie portfela/miesiaca, wiec szkielet pojawia sie od razu. */}
+        <Suspense key={`${activeWalletId}-${monthKey(ym)}`} fallback={<MonthSkeleton />}>
+          <MonthContent
+            householdId={householdId}
+            walletId={activeWalletId}
+            ym={ym}
+            locale={locale}
+            categories={categories ?? []}
+            activeTab={activeTab}
+          />
+        </Suspense>
+      </main>
 
       <FabAddButton
         householdId={householdId}

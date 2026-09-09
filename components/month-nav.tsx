@@ -31,7 +31,7 @@ export function MonthNav({ ym }: { ym: YearMonth }) {
         type="button"
         aria-label="Poprzedni miesiąc"
         onClick={() => go(shiftMonth(ym, -1))}
-        className="tap-target flex h-9 w-9 items-center justify-center rounded-[10px] text-muted-foreground hover:bg-muted"
+        className="tap-target flex h-11 w-11 items-center justify-center rounded-[10px] text-muted-foreground hover:bg-muted sm:h-9 sm:w-9"
       >
         <ChevronLeft className="h-4 w-4" />
       </button>
@@ -41,7 +41,7 @@ export function MonthNav({ ym }: { ym: YearMonth }) {
           setPickerYear(ym.y);
           setOpen(!open);
         }}
-        className="min-h-9 min-w-28 rounded-[10px] px-2 text-center text-base font-medium capitalize hover:bg-muted"
+        className="min-h-11 min-w-28 rounded-[10px] px-2 text-center text-base font-medium capitalize hover:bg-muted sm:min-h-9"
       >
         {monthLabel(ym, locale)}
       </button>
@@ -49,7 +49,7 @@ export function MonthNav({ ym }: { ym: YearMonth }) {
         type="button"
         aria-label="Następny miesiąc"
         onClick={() => go(shiftMonth(ym, 1))}
-        className="tap-target flex h-9 w-9 items-center justify-center rounded-[10px] text-muted-foreground hover:bg-muted"
+        className="tap-target flex h-11 w-11 items-center justify-center rounded-[10px] text-muted-foreground hover:bg-muted sm:h-9 sm:w-9"
       >
         <ChevronRight className="h-4 w-4" />
       </button>

@@ -294,6 +294,36 @@ export function UpcomingTable({
     router.refresh();
   }
 
+  /** Na telefonie edycje otwiera dotkniecie wiersza, na desktopie menu — jedno zrodlo danych. */
+  function openEdit(group: PaymentGroup) {
+    const row = group.head;
+    const split = group.parts.length > 0;
+    setEditing({
+      id: row.id,
+      kind: row.kind,
+      title: row.title,
+      amountCents: group.total,
+      categoryId: row.category_id,
+      date: row.date,
+      isPaid: isPaid(row),
+      paymentUrl: row.payment_url,
+      graceDays: row.grace_days,
+      note: row.note,
+      isAutomatic: row.is_automatic,
+      recurringRuleId: row.recurring_rule_id,
+      rule: row.recurring_rule_id ? rules[row.recurring_rule_id] ?? null : null,
+      splitGroupId: split ? group.key : null,
+      splitParts: split
+        ? group.parts.map((p) => ({
+            id: p.id,
+            categoryId: p.category_id,
+            amountCents: p.amount_cents,
+            label: p.split_label,
+          }))
+        : undefined,
+    });
+  }
+
   /** Jedna siatka dla pozycji oplaconych i nieoplaconych, zeby kolumny wszedzie sie pokrywaly. */
   function renderGroup(group: PaymentGroup, withBorder: boolean) {
     const row = group.head;
@@ -303,10 +333,101 @@ export function UpcomingTable({
     const late = !paid && row.date < today;
     const expanded = expandedSplits.has(group.key);
 
+    const categoryNames = split
+      ? group.parts
+          .map((p) => {
+            const c = categoryById.get(p.category_id);
+            return c ? categoryDisplayName(c.name, locale, c.name_en) : "";
+          })
+          .filter(Boolean)
+          .join(", ")
+      : cat
+        ? categoryDisplayName(cat.name, locale, cat.name_en)
+        : "";
+
     return (
       <div key={group.key} className={withBorder ? "border-t border-border" : ""}>
+      {/* Telefon: dwie linie zamiast dziewieciu kolumn. Dotkniecie wiersza otwiera edycje,
+          wiec nie ma osobnego menu obok checkboxa. */}
+      <div className={`flex items-center gap-2 px-3 py-2.5 sm:hidden ${paid ? "text-muted-foreground" : ""}`}>
+        <button type="button" onClick={() => openEdit(group)} className="min-w-0 flex-1 text-left">
+          <span className="flex items-center gap-1.5">
+            {split ? (
+              <span className="flex shrink-0 items-center">
+                {group.parts.slice(0, 3).map((part) => (
+                  <span
+                    key={part.id}
+                    className="-mr-1 h-2.5 w-2.5 rounded-full ring-2 ring-card"
+                    style={{ background: categoryById.get(part.category_id)?.color }}
+                  />
+                ))}
+              </span>
+            ) : (
+              <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: cat?.color }} />
+            )}
+            <span className="truncate text-base font-medium">{row.title}</span>
+            {row.recurring_rule_id && <Repeat className="h-3 w-3 shrink-0 text-muted-foreground" />}
+            {row.is_automatic && <Zap className="h-3.5 w-3.5 shrink-0" style={{ color: "var(--neatly-primary-dark)" }} />}
+          </span>
+          <span
+            className="mt-0.5 flex items-center gap-1.5 truncate text-sm"
+            style={{ color: late ? "var(--destructive)" : "var(--muted-foreground)" }}
+          >
+            <span className="truncate">{categoryNames}</span>
+            <span className="shrink-0 opacity-50">·</span>
+            <span className="shrink-0">
+              {shortDate(row.date, locale)}
+              {late && ` ${t.overdue}`}
+            </span>
+          </span>
+        </button>
+
+        <span className="tabular shrink-0 text-base font-semibold">{money(group.total, locale)}</span>
+
+        {!paid && row.payment_url && (
+          <a
+            href={row.payment_url}
+            target="_blank"
+            rel="noopener noreferrer"
+            aria-label={t.payNow}
+            className="tap-target flex h-9 w-9 shrink-0 items-center justify-center rounded-full"
+            style={payNowStyle(paymentStatus(row.date, row.grace_days, today))}
+          >
+            <ExternalLink className="h-4 w-4" />
+          </a>
+        )}
+
+        {split && (
+          <button
+            type="button"
+            onClick={() => toggleSplit(group.key)}
+            aria-expanded={expanded}
+            aria-label={t.splitOne}
+            className="tap-target flex h-8 w-8 shrink-0 items-center justify-center text-muted-foreground"
+          >
+            <ChevronDown
+              className="h-5 w-5 transition-transform"
+              style={{ transform: expanded ? "rotate(180deg)" : undefined }}
+            />
+          </button>
+        )}
+
+        <button
+          type="button"
+          onClick={() => togglePaid(group)}
+          className="tap-target flex h-7 w-7 shrink-0 items-center justify-center rounded-[7px] border"
+          style={{
+            borderColor: paid ? "var(--primary)" : "var(--border)",
+            background: paid ? "var(--primary)" : "transparent",
+          }}
+          aria-label={row.kind === "income" ? t.received : t.paid}
+        >
+          {paid && <Check className="h-4 w-4 text-primary-foreground" />}
+        </button>
+      </div>
+
       <div
-        className={`${GRID} items-center gap-1 px-2 py-2 text-base ${paid ? "text-muted-foreground" : ""}`}
+        className={`${GRID} hidden items-center gap-1 px-2 py-2 text-base sm:grid ${paid ? "text-muted-foreground" : ""}`}
       >
         <span
           className="mx-auto flex h-6 w-6 items-center justify-center rounded-full border border-border"
@@ -399,34 +520,7 @@ export function UpcomingTable({
             </button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
-            <DropdownMenuItem
-              onClick={() =>
-                setEditing({
-                  id: row.id,
-                  kind: row.kind,
-                  title: row.title,
-                  amountCents: group.total,
-                  categoryId: row.category_id,
-                  date: row.date,
-                  isPaid: paid,
-                  paymentUrl: row.payment_url,
-                  graceDays: row.grace_days,
-                  note: row.note,
-                  isAutomatic: row.is_automatic,
-                  recurringRuleId: row.recurring_rule_id,
-                  rule: row.recurring_rule_id ? rules[row.recurring_rule_id] ?? null : null,
-                  splitGroupId: split ? group.key : null,
-                  splitParts: split
-                    ? group.parts.map((p) => ({
-                        id: p.id,
-                        categoryId: p.category_id,
-                        amountCents: p.amount_cents,
-                        label: p.split_label,
-                      }))
-                    : undefined,
-                })
-              }
-            >
+            <DropdownMenuItem onClick={() => openEdit(group)}>
               <Pencil className="h-4 w-4" /> {t.edit}
             </DropdownMenuItem>
             {!split && (
@@ -448,19 +542,29 @@ export function UpcomingTable({
           {group.parts.map((part) => {
             const partCat = categoryById.get(part.category_id);
             return (
-              <div key={part.id} className={`${GRID} items-center gap-1 px-2 py-1.5 text-sm`}>
-                <span />
-                <span className="truncate pl-4 text-muted-foreground">{part.split_label || "—"}</span>
-                <span className="flex min-w-0 items-center gap-1.5 truncate">
+              <div key={part.id}>
+                <div className="flex items-center gap-2 py-1.5 pr-3 pl-8 text-sm text-muted-foreground sm:hidden">
                   <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: partCat?.color }} />
-                  {partCat ? categoryDisplayName(partCat.name, locale, partCat.name_en) : ""}
-                </span>
-                <span />
-                <span />
-                <span className="tabular text-right">{money(part.amount_cents, locale)}</span>
-                <span />
-                <span />
-                <span />
+                  <span className="min-w-0 flex-1 truncate">
+                    {part.split_label || (partCat ? categoryDisplayName(partCat.name, locale, partCat.name_en) : "")}
+                  </span>
+                  <span className="tabular shrink-0">{money(part.amount_cents, locale)}</span>
+                </div>
+
+                <div className={`${GRID} hidden items-center gap-1 px-2 py-1.5 text-sm sm:grid`}>
+                  <span />
+                  <span className="truncate pl-4 text-muted-foreground">{part.split_label || "—"}</span>
+                  <span className="flex min-w-0 items-center gap-1.5 truncate">
+                    <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: partCat?.color }} />
+                    {partCat ? categoryDisplayName(partCat.name, locale, partCat.name_en) : ""}
+                  </span>
+                  <span />
+                  <span />
+                  <span className="tabular text-right">{money(part.amount_cents, locale)}</span>
+                  <span />
+                  <span />
+                  <span />
+                </div>
               </div>
             );
           })}
@@ -499,14 +603,15 @@ export function UpcomingTable({
       </div>
 
       <div className="overflow-x-auto rounded-[14px] border border-border bg-card">
-        <div className="min-w-235">
+        {/* Szerokosc minimalna dopiero od sm — na telefonie tabela nie przewija sie w poziomie. */}
+        <div className="sm:min-w-235">
           {rows.length === 0 && drafts.length === 0 && (
             <div className="px-4 py-10 text-center text-base text-muted-foreground">{t.noUpcoming}</div>
           )}
 
           {(rows.length > 0 || drafts.length > 0) && (
             <div
-              className={`${GRID} items-center gap-1 border-b border-border bg-muted/50 px-2 py-2 text-xs font-medium tracking-wide text-muted-foreground uppercase`}
+              className={`${GRID} hidden items-center gap-1 border-b border-border bg-muted/50 px-2 py-2 text-xs font-medium tracking-wide text-muted-foreground uppercase sm:grid`}
             >
               <span />
               <span>{t.title}</span>
@@ -543,6 +648,7 @@ export function UpcomingTable({
 
           {openGroups.map((group, i) => renderGroup(group, i > 0 || paidGroups.length > 0))}
 
+          {/* Wiersze robocze tylko od sm — na telefonie dodaje sie przez przycisk +. */}
           {drafts.map((r, i) => {
             const isLast = i === drafts.length - 1;
             const cat = categoryById.get(r.categoryId);
@@ -550,7 +656,7 @@ export function UpcomingTable({
             return (
               <div
                 key={r.key}
-                className={`${GRID} items-center gap-1 border-t border-border bg-muted/40 px-2 py-1.5 text-base`}
+                className={`${GRID} hidden items-center gap-1 border-t border-border bg-muted/40 px-2 py-1.5 text-base sm:grid`}
               >
                 <button
                   type="button"
@@ -661,7 +767,7 @@ export function UpcomingTable({
         </div>
       </div>
 
-      <div className="mt-2 flex flex-wrap items-center gap-3">
+      <div className="mt-2 hidden flex-wrap items-center gap-3 sm:flex">
         <button
           type="button"
           onClick={addRow}

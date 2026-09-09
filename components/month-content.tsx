@@ -4,10 +4,10 @@ import type { EditingRule, EditingSplitPart } from "@/components/transaction-for
 import { UpcomingTable } from "@/components/upcoming-table";
 import { BudgetTiles, type BudgetRow } from "@/components/budget-tiles";
 import { OpeningBalance } from "@/components/opening-balance";
+import { SummaryCard } from "@/components/summary-card";
 import { createClient } from "@/lib/supabase/server";
 import { monthRange, isoToday, type YearMonth } from "@/lib/month";
 import { computeSummary, categorySpent } from "@/lib/summary";
-import { money } from "@/lib/format";
 import { ensureMonthMaterialized, settleAutomaticPayments } from "@/lib/materialize";
 import { t as translate, type Locale } from "@/lib/i18n";
 
@@ -158,40 +158,12 @@ export async function MonthContent({
     <>
       {/* Prawa kolumna na mobile jest u góry */}
       <aside className="order-1 flex flex-col gap-4 md:order-2">
-        <section className="rounded-[14px] border border-border bg-card p-4">
-          <div className="flex items-center justify-between text-base">
+        <SummaryCard
+          summary={summary}
+          opening={
             <OpeningBalance householdId={householdId} walletId={walletId} ym={ym} openingCents={openingCents} />
-          </div>
-          <div className="mt-3 grid grid-cols-2 gap-3">
-            <div>
-              <div className="text-xs text-muted-foreground">{dict.income}</div>
-              <div className="tabular text-xl font-semibold">{money(summary.income, locale)}</div>
-            </div>
-            <div>
-              <div className="text-xs text-muted-foreground">{dict.plannedExpenses}</div>
-              <div className="tabular text-xl font-semibold">{money(summary.plannedExpenses, locale)}</div>
-            </div>
-            <div>
-              <div className="text-xs text-muted-foreground">{dict.accountBalance}</div>
-              <div className="tabular text-xl font-semibold">{money(summary.accountBalance, locale)}</div>
-            </div>
-            <div>
-              <div className="text-xs text-muted-foreground">{dict.balanceWithBudgets}</div>
-              <div className="tabular text-xl font-semibold" style={{ color: "var(--neatly-primary-dark)" }}>
-                {money(summary.balanceWithBudgets, locale)}
-              </div>
-            </div>
-          </div>
-          <div className="mt-3 flex items-center justify-between border-t border-border pt-3">
-            <span className="text-xs text-muted-foreground">{dict.balanceNow}</span>
-            <span
-              className="tabular text-xl font-semibold"
-              style={{ color: summary.balanceNow < 0 ? "var(--destructive)" : "var(--neatly-success)" }}
-            >
-              {money(summary.balanceNow, locale)}
-            </span>
-          </div>
-        </section>
+          }
+        />
 
         <BudgetTiles
           householdId={householdId}
