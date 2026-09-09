@@ -1,4 +1,6 @@
+import Link from "next/link";
 import { redirect } from "next/navigation";
+import { ArrowLeft } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { RenameForm } from "@/components/household/rename-form";
 import { InvitePanel } from "@/components/household/invite-panel";
@@ -54,7 +56,16 @@ export default async function HouseholdPage() {
 
   return (
     <main className="mx-auto flex w-full max-w-lg flex-1 flex-col gap-6 p-4 md:p-6">
-      <h1 className="text-lg font-semibold">{dict.household}</h1>
+      <div className="flex items-center gap-2">
+        <Link
+          href="/"
+          aria-label={dict.back}
+          className="tap-target -ml-2 flex h-9 w-9 shrink-0 items-center justify-center rounded-[10px] text-muted-foreground hover:bg-muted"
+        >
+          <ArrowLeft className="h-5 w-5" />
+        </Link>
+        <h1 className="text-lg font-semibold">{dict.household}</h1>
+      </div>
 
       <section className="flex flex-col gap-2">
         <h2 className="text-sm font-medium text-muted-foreground">{dict.walletName}</h2>

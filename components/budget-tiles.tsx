@@ -13,7 +13,7 @@ import type { YearMonth } from "@/lib/month";
 import { useLocale } from "@/components/locale-provider";
 import { categoryDisplayName } from "@/lib/i18n";
 
-type Category = { id: string; name: string; emoji: string; color: string };
+type Category = { id: string; name: string; name_en: string | null; emoji: string; color: string };
 export type BudgetRow = { id: string; categoryId: string; limitCents: number; spentCents: number };
 
 type Draft = { id: string | null; categoryId: string; amount: string };
@@ -120,7 +120,7 @@ export function BudgetTiles({
                 <div className="flex items-center justify-between text-sm">
                   <span className="flex items-center gap-1.5 font-medium">
                     <span aria-hidden>{cat?.emoji}</span>
-                    {cat ? categoryDisplayName(cat.name, locale) : ""}
+                    {cat ? categoryDisplayName(cat.name, locale, cat.name_en) : ""}
                   </span>
                   <span className="tabular text-xs text-muted-foreground">
                     {money(row.spentCents, locale)} / {money(row.limitCents, locale)}
@@ -161,7 +161,7 @@ export function BudgetTiles({
                   <option value="">—</option>
                   {available.map((c) => (
                     <option key={c.id} value={c.id}>
-                      {c.emoji} {categoryDisplayName(c.name, locale)}
+                      {c.emoji} {categoryDisplayName(c.name, locale, c.name_en)}
                     </option>
                   ))}
                 </select>

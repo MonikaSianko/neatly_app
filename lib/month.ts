@@ -61,3 +61,12 @@ export function isoToday(): string {
   const d = new Date();
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 }
+
+export type PaymentStatus = "upcoming" | "due" | "overdue";
+
+/** upcoming: termin jeszcze nie nadszedl. due: termin nadszedl, jestesmy w oknie karencji. overdue: okno karencji minelo. */
+export function paymentStatus(date: string, graceDays: number, today: string): PaymentStatus {
+  if (date > today) return "upcoming";
+  const graceEnd = isoOf(addDays(toDate(date), graceDays));
+  return today <= graceEnd ? "due" : "overdue";
+}

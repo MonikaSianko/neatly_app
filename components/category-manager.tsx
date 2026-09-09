@@ -25,6 +25,7 @@ const PALETTE = [
 export type Category = {
   id: string;
   name: string;
+  name_en: string | null;
   emoji: string;
   color: string;
   kind: CategoryKind;
@@ -88,7 +89,7 @@ export function CategoryManager({
     if (!edit) return;
     startTransition(async () => {
       const result = edit.id
-        ? await updateCategory(edit.id, { name: edit.name, emoji: edit.emoji, color: edit.color })
+        ? await updateCategory(edit.id, { name: edit.name, emoji: edit.emoji, color: edit.color }, locale)
         : await createCategory(householdId, list.length, { ...edit, kind });
       if (result.error) {
         setError(result.error);
@@ -140,7 +141,7 @@ export function CategoryManager({
               >
                 <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: c.color }} />
                 <span aria-hidden>{c.emoji}</span>
-                <span className="flex-1 truncate text-sm">{categoryDisplayName(c.name, locale)}</span>
+                <span className="flex-1 truncate text-sm">{categoryDisplayName(c.name, locale, c.name_en)}</span>
                 <button
                   type="button"
                   onClick={() => move(c.id, -1)}
@@ -159,7 +160,14 @@ export function CategoryManager({
                 </button>
                 <button
                   type="button"
-                  onClick={() => setEdit({ id: c.id, name: c.name, emoji: c.emoji, color: c.color })}
+                  onClick={() =>
+                    setEdit({
+                      id: c.id,
+                      name: categoryDisplayName(c.name, locale, c.name_en),
+                      emoji: c.emoji,
+                      color: c.color,
+                    })
+                  }
                   className="p-1 text-muted-foreground"
                 >
                   <Pencil className="h-3.5 w-3.5" />
@@ -203,7 +211,7 @@ export function CategoryManager({
                     >
                       <span aria-hidden>{c.emoji}</span>
                       <span className="flex-1 truncate text-sm text-muted-foreground">
-                        {categoryDisplayName(c.name, locale)}
+                        {categoryDisplayName(c.name, locale, c.name_en)}
                       </span>
                       <button
                         type="button"
@@ -226,13 +234,19 @@ export function CategoryManager({
           {edit && (
             <form onSubmit={submitEdit} className="flex flex-col gap-4 border-t border-border pt-4">
               <div>
-                <label className="mb-1.5 block text-sm font-medium">{t.walletName}</label>
+                <label className="mb-1.5 flex items-center gap-2 text-sm font-medium">
+                  {t.walletName}
+                  <span className="rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-semibold tracking-wide text-muted-foreground uppercase">
+                    {locale}
+                  </span>
+                </label>
                 <input
                   autoFocus
                   value={edit.name}
                   onChange={(e) => setEdit({ ...edit, name: e.target.value })}
                   className="w-full rounded-[10px] border border-border bg-muted px-3 py-2 text-sm"
                 />
+                <p className="mt-1 text-xs text-muted-foreground">{t.categoryNameHint}</p>
               </div>
               <div>
                 <label className="mb-1.5 block text-sm font-medium">{t.icon}</label>

@@ -1,4 +1,6 @@
+import type { CSSProperties } from "react";
 import type { Locale } from "./i18n";
+import type { PaymentStatus } from "./month";
 
 const INTL_LOCALE: Record<Locale, string> = { pl: "pl-PL", en: "en-GB" };
 
@@ -15,6 +17,13 @@ export function money(amountCents: number, locale: Locale = "pl"): string {
 export function shortDate(iso: string, locale: Locale = "pl"): string {
   const [y, m, d] = iso.split("-").map(Number);
   return new Intl.DateTimeFormat(INTL_LOCALE[locale], { day: "numeric", month: "short" }).format(new Date(y, m - 1, d));
+}
+
+/** Kolory przycisku PayNOW wg statusu: upcoming (neutralny), due (zielony), overdue (czerwony). */
+export function payNowStyle(status: PaymentStatus): CSSProperties {
+  if (status === "due") return { background: "var(--neatly-success)", color: "white" };
+  if (status === "overdue") return { background: "var(--neatly-danger-soft)", color: "var(--destructive)" };
+  return { border: "1px solid var(--border)", color: "var(--muted-foreground)" };
 }
 
 /** Parsuje wpisana kwote ("1 234,56" / "1234.56") na grosze. */

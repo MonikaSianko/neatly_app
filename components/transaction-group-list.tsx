@@ -2,7 +2,8 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { ChevronDown, MoreVertical, Pencil, ArrowRightCircle, Trash2 } from "lucide-react";
+import { ChevronDown, MoreVertical, Pencil, ArrowRightCircle, Trash2, ExternalLink, Repeat, Zap } from "lucide-react";
+import { paymentStatus } from "@/lib/month";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -10,11 +11,12 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { TransactionForm, type EditingTransaction, type EditingRule } from "@/components/transaction-form";
+import { NotePopover } from "@/components/note-popover";
 import { ScopeDialog, type Scope } from "@/components/scope-dialog";
 import { deleteTransaction, moveTransactionToNextMonth } from "@/lib/actions/transactions";
 import { deleteRecurringEntry } from "@/lib/actions/recurring";
 import { createClient } from "@/lib/supabase/client";
-import { money, shortDate } from "@/lib/format";
+import { money, shortDate, payNowStyle } from "@/lib/format";
 import { useLocale } from "@/components/locale-provider";
 import { categoryDisplayName } from "@/lib/i18n";
 
@@ -26,15 +28,19 @@ export type TxRow = {
   is_paid: boolean;
   category_id: string;
   recurring_rule_id: string | null;
+  payment_url: string | null;
+  grace_days: number;
+  note: string | null;
+  is_automatic: boolean;
 };
 
 export type TxGroup = {
-  category: { id: string; name: string; emoji: string; color: string } | null;
+  category: { id: string; name: string; name_en: string | null; emoji: string; color: string } | null;
   items: TxRow[];
   sum: number;
 };
 
-type Category = { id: string; name: string; emoji: string; kind: "expense" | "income" };
+type Category = { id: string; name: string; name_en: string | null; emoji: string; kind: "expense" | "income" };
 
 export function TransactionGroupList({
   groups,
@@ -128,7 +134,7 @@ export function TransactionGroupList({
               >
                 <span aria-hidden>{group.category?.emoji}</span>
                 <span className="flex-1 truncate text-sm font-medium">
-                  {group.category ? categoryDisplayName(group.category.name, locale) : "—"}
+                  {group.category ? categoryDisplayName(group.category.name, locale, group.category.name_en) : "—"}
                 </span>
                 <span className="text-xs text-muted-foreground">{group.items.length} {t.rows}</span>
                 <span className="tabular text-sm font-medium">{money(group.sum, locale)}</span>
@@ -147,25 +153,52 @@ export function TransactionGroupList({
                         key={row.id}
                         className={`flex items-center gap-2 px-4 py-2 ${i > 0 ? "border-t border-border" : ""}`}
                       >
-                        <input
-                          type="checkbox"
-                          checked={paid}
-                          onChange={() => togglePaid(row)}
-                          className="h-4 w-4 rounded-[6px]"
-                          aria-label={kind === "income" ? t.received : t.paid}
-                        />
-                        <span className="flex-1 truncate text-sm">
-                          {row.title}
-                          {row.recurring_rule_id && <span className="ml-1">🔁</span>}
+                        <label className="tap-target flex h-6 w-6 shrink-0 items-center justify-center">
+                          <input
+                            type="checkbox"
+                            checked={paid}
+                            onChange={() => togglePaid(row)}
+                            className="h-4 w-4 rounded-[6px]"
+                            aria-label={kind === "income" ? t.received : t.paid}
+                          />
+                        </label>
+                        <span className="flex min-w-0 flex-1 items-center gap-1.5 text-sm">
+                          <span className="truncate">{row.title}</span>
+                          {row.recurring_rule_id && (
+                            <Repeat className="h-3 w-3 shrink-0 text-muted-foreground" aria-label={t.repeat} />
+                          )}
+                          {row.is_automatic && (
+                            <Zap
+                              className="h-3.5 w-3.5 shrink-0"
+                              style={{ color: "var(--neatly-primary-dark)" }}
+                              aria-label={t.automatic}
+                            />
+                          )}
+                          {row.note && <NotePopover note={row.note} />}
                         </span>
                         <span className="text-xs" style={{ color: overdue ? "var(--destructive)" : "var(--muted-foreground)" }}>
                           {shortDate(row.date, locale)}
                           {overdue && ` ${t.overdue}`}
                         </span>
+                        {!paid && row.payment_url && (
+                          <a
+                            href={row.payment_url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="flex shrink-0 items-center gap-1 rounded-full px-2.5 py-2 text-xs font-medium sm:py-1"
+                            style={payNowStyle(paymentStatus(row.date, row.grace_days, today))}
+                          >
+                            <ExternalLink className="h-3 w-3" /> {t.payNow}
+                          </a>
+                        )}
                         <span className="tabular text-sm font-medium">{money(row.amount_cents, locale)}</span>
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
-                            <button type="button" className="p-1 text-muted-foreground" aria-label="Menu pozycji">
+                            <button
+                              type="button"
+                              className="tap-target flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-muted-foreground hover:bg-muted"
+                              aria-label="Menu pozycji"
+                            >
                               <MoreVertical className="h-4 w-4" />
                             </button>
                           </DropdownMenuTrigger>
@@ -180,6 +213,10 @@ export function TransactionGroupList({
                                   categoryId: row.category_id,
                                   date: row.date,
                                   isPaid: paid,
+                                  paymentUrl: row.payment_url,
+                                  graceDays: row.grace_days,
+                                  note: row.note,
+                                  isAutomatic: row.is_automatic,
                                   recurringRuleId: row.recurring_rule_id,
                                   rule: row.recurring_rule_id ? rules[row.recurring_rule_id] ?? null : null,
                                 })
@@ -219,6 +256,7 @@ export function TransactionGroupList({
         open={!!deleteTarget}
         onOpenChange={(open) => !open && setDeleteTarget(null)}
         title={t.scopeDelTitle}
+        mode="delete"
         onPick={pickDeleteScope}
       />
     </>

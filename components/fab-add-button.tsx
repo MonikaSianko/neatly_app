@@ -5,7 +5,7 @@ import { Plus } from "lucide-react";
 import { TransactionForm } from "@/components/transaction-form";
 import { useLocale } from "@/components/locale-provider";
 
-type Category = { id: string; name: string; emoji: string; kind: "expense" | "income" };
+type Category = { id: string; name: string; name_en: string | null; emoji: string; kind: "expense" | "income" };
 
 export function FabAddButton({
   householdId,

@@ -31,7 +31,7 @@ export function MonthNav({ ym }: { ym: YearMonth }) {
         type="button"
         aria-label="Poprzedni miesiąc"
         onClick={() => go(shiftMonth(ym, -1))}
-        className="rounded-[10px] p-1.5 text-muted-foreground hover:bg-muted"
+        className="tap-target flex h-9 w-9 items-center justify-center rounded-[10px] text-muted-foreground hover:bg-muted"
       >
         <ChevronLeft className="h-4 w-4" />
       </button>
@@ -41,7 +41,7 @@ export function MonthNav({ ym }: { ym: YearMonth }) {
           setPickerYear(ym.y);
           setOpen(!open);
         }}
-        className="min-w-[7rem] rounded-[10px] px-2 py-1 text-center text-sm font-medium capitalize hover:bg-muted"
+        className="min-h-9 min-w-28 rounded-[10px] px-2 text-center text-sm font-medium capitalize hover:bg-muted"
       >
         {monthLabel(ym, locale)}
       </button>
@@ -49,7 +49,7 @@ export function MonthNav({ ym }: { ym: YearMonth }) {
         type="button"
         aria-label="Następny miesiąc"
         onClick={() => go(shiftMonth(ym, 1))}
-        className="rounded-[10px] p-1.5 text-muted-foreground hover:bg-muted"
+        className="tap-target flex h-9 w-9 items-center justify-center rounded-[10px] text-muted-foreground hover:bg-muted"
       >
         <ChevronRight className="h-4 w-4" />
       </button>
@@ -57,11 +57,21 @@ export function MonthNav({ ym }: { ym: YearMonth }) {
       {open && (
         <div className="absolute top-10 z-40 w-64 rounded-[14px] border border-border bg-card p-3 shadow-md">
           <div className="mb-2 flex items-center justify-between">
-            <button type="button" onClick={() => setPickerYear((y) => y - 1)} className="p-1">
+            <button
+              type="button"
+              onClick={() => setPickerYear((y) => y - 1)}
+              aria-label="Poprzedni rok"
+              className="flex h-9 w-9 items-center justify-center rounded-[10px] hover:bg-muted"
+            >
               <ChevronLeft className="h-4 w-4" />
             </button>
             <span className="text-sm font-medium">{pickerYear}</span>
-            <button type="button" onClick={() => setPickerYear((y) => y + 1)} className="p-1">
+            <button
+              type="button"
+              onClick={() => setPickerYear((y) => y + 1)}
+              aria-label="Następny rok"
+              className="flex h-9 w-9 items-center justify-center rounded-[10px] hover:bg-muted"
+            >
               <ChevronRight className="h-4 w-4" />
             </button>
           </div>
@@ -76,7 +86,7 @@ export function MonthNav({ ym }: { ym: YearMonth }) {
                     go({ y: pickerYear, m: i + 1 });
                     setOpen(false);
                   }}
-                  className="rounded-[10px] py-2 text-sm capitalize"
+                  className="min-h-11 rounded-[10px] text-sm capitalize hover:bg-muted sm:min-h-9"
                   style={active ? { background: "var(--primary)", color: "var(--primary-foreground)" } : undefined}
                 >
                   {monthShort(i)}

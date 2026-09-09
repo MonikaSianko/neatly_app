@@ -2,18 +2,31 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Home, Languages, LogOut, Tags, UserRound } from "lucide-react";
+import { Check, Home, Languages, LogOut, Tags, UserRound } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuLabel,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
   DropdownMenuSeparator,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { CategoryManager, type Category } from "@/components/category-manager";
 import { createClient } from "@/lib/supabase/client";
 import { useLocale } from "@/components/locale-provider";
+import { useMediaQuery } from "@/lib/use-media-query";
+import type { Locale } from "@/lib/i18n";
+
+const LOCALES: { value: Locale; label: string }[] = [
+  { value: "pl", label: "Polski" },
+  { value: "en", label: "English" },
+];
 
 export function UserMenu({
   email,
@@ -27,6 +40,8 @@ export function UserMenu({
   const router = useRouter();
   const { locale, t, setLocale } = useLocale();
   const [categoriesOpen, setCategoriesOpen] = useState(false);
+  const [sheetOpen, setSheetOpen] = useState(false);
+  const isMobile = useMediaQuery("(max-width: 639px)");
 
   async function logout() {
     const supabase = createClient();
@@ -35,56 +50,122 @@ export function UserMenu({
     router.refresh();
   }
 
+  const trigger = (
+    <button
+      type="button"
+      aria-label={t.account}
+      className="tap-target flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-muted-foreground hover:bg-muted"
+    >
+      <UserRound className="h-5 w-5" />
+    </button>
+  );
+
   return (
     <>
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <button
-            type="button"
-            aria-label="Menu użytkownika"
-            className="shrink-0 rounded-full p-1.5 text-muted-foreground hover:bg-muted"
-          >
-            <UserRound className="h-5 w-5" />
-          </button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end">
-          {email && <DropdownMenuLabel className="font-normal text-muted-foreground">{email}</DropdownMenuLabel>}
-          <DropdownMenuSeparator />
-          <DropdownMenuItem onClick={() => setCategoriesOpen(true)}>
-            <Tags className="h-4 w-4" />
-            {t.categories}
-          </DropdownMenuItem>
-          <DropdownMenuItem onClick={() => router.push("/household")}>
-            <Home className="h-4 w-4" />
-            {t.household}
-          </DropdownMenuItem>
-          <div className="flex items-center gap-2 px-2 py-1.5">
-            <Languages className="h-4 w-4 text-muted-foreground" />
-            <span className="flex-1 text-sm">{t.language}</span>
-            <div className="flex overflow-hidden rounded-lg border border-border">
-              {(["pl", "en"] as const).map((l) => (
+      {isMobile ? (
+        <Sheet open={sheetOpen} onOpenChange={setSheetOpen}>
+          <SheetTrigger asChild>{trigger}</SheetTrigger>
+            <SheetContent side="bottom" className="max-h-[85vh] gap-0 rounded-t-2xl pb-[env(safe-area-inset-bottom)]">
+              <SheetHeader className="pb-2">
+                <SheetTitle>{t.account}</SheetTitle>
+                {email && <p className="truncate text-sm text-muted-foreground">{email}</p>}
+              </SheetHeader>
+
+              <nav className="flex flex-col px-2 pb-3">
                 <button
-                  key={l}
                   type="button"
-                  onClick={(e) => {
-                    e.preventDefault();
-                    setLocale(l);
+                  onClick={() => {
+                    setSheetOpen(false);
+                    setCategoriesOpen(true);
                   }}
-                  className="px-2.5 py-1 text-xs font-medium uppercase"
-                  style={locale === l ? { background: "var(--primary)", color: "var(--primary-foreground)" } : { color: "var(--muted-foreground)" }}
+                  className="flex min-h-12 items-center gap-3 rounded-[10px] px-3 text-left text-[15px] active:bg-muted"
                 >
-                  {l}
+                  <Tags className="h-5 w-5 text-muted-foreground" />
+                  {t.categories}
                 </button>
-              ))}
-            </div>
-          </div>
-          <DropdownMenuSeparator />
-          <DropdownMenuItem onClick={logout}>
-            <LogOut className="h-4 w-4" />
-            {t.logout}
-          </DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSheetOpen(false);
+                    router.push("/household");
+                  }}
+                  className="flex min-h-12 items-center gap-3 rounded-[10px] px-3 text-left text-[15px] active:bg-muted"
+                >
+                  <Home className="h-5 w-5 text-muted-foreground" />
+                  {t.household}
+                </button>
+
+                <div className="mt-1 border-t border-border pt-2">
+                  <div className="flex items-center gap-3 px-3 py-2 text-xs font-medium text-muted-foreground">
+                    <Languages className="h-4 w-4" />
+                    {t.language}
+                  </div>
+                  {LOCALES.map((l) => (
+                    <button
+                      key={l.value}
+                      type="button"
+                      onClick={() => setLocale(l.value)}
+                      className="flex min-h-12 w-full items-center gap-3 rounded-[10px] px-3 pl-11 text-left text-[15px] active:bg-muted"
+                    >
+                      <span className="flex-1">{l.label}</span>
+                      {locale === l.value && <Check className="h-4 w-4" style={{ color: "var(--primary)" }} />}
+                    </button>
+                  ))}
+                </div>
+
+                <button
+                  type="button"
+                  onClick={logout}
+                  className="mt-1 flex min-h-12 items-center gap-3 rounded-[10px] border-t border-border px-3 text-left text-[15px] active:bg-muted"
+                >
+                  <LogOut className="h-5 w-5 text-muted-foreground" />
+                  {t.logout}
+                </button>
+              </nav>
+          </SheetContent>
+        </Sheet>
+      ) : (
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>{trigger}</DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-64">
+            {email && (
+              <DropdownMenuLabel className="truncate font-normal text-muted-foreground" title={email}>
+                {email}
+              </DropdownMenuLabel>
+            )}
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onClick={() => setCategoriesOpen(true)}>
+              <Tags className="h-4 w-4" />
+              {t.categories}
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => router.push("/household")}>
+              <Home className="h-4 w-4" />
+              {t.household}
+            </DropdownMenuItem>
+            <DropdownMenuSub>
+              <DropdownMenuSubTrigger>
+                <Languages className="h-4 w-4" />
+                <span className="flex-1">{t.language}</span>
+                <span className="text-xs text-muted-foreground uppercase">{locale}</span>
+              </DropdownMenuSubTrigger>
+              <DropdownMenuSubContent className="min-w-36">
+                <DropdownMenuRadioGroup value={locale} onValueChange={(v) => setLocale(v as Locale)}>
+                  {LOCALES.map((l) => (
+                    <DropdownMenuRadioItem key={l.value} value={l.value}>
+                      {l.label}
+                    </DropdownMenuRadioItem>
+                  ))}
+                </DropdownMenuRadioGroup>
+              </DropdownMenuSubContent>
+            </DropdownMenuSub>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onClick={logout}>
+              <LogOut className="h-4 w-4" />
+              {t.logout}
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      )}
 
       <CategoryManager
         open={categoriesOpen}

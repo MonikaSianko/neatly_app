@@ -2,16 +2,25 @@
 
 import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Minus, Plus, MoreVertical, X, Repeat, Check } from "lucide-react";
+import { ArrowDownLeft, ArrowUpRight, Plus, MoreVertical, X, Repeat, Check, ExternalLink, Zap } from "lucide-react";
 import { DraftRecurrenceDialog } from "@/components/draft-recurrence-dialog";
+import { NotePopover } from "@/components/note-popover";
 import { saveDraftRows, type DraftRowInput } from "@/lib/actions/drafts";
 import { createClient } from "@/lib/supabase/client";
-import { money, shortDate, parseAmountToCents } from "@/lib/format";
+import { money, shortDate, parseAmountToCents, payNowStyle } from "@/lib/format";
+import { paymentStatus } from "@/lib/month";
 import type { RecurrencePattern } from "@/lib/actions/recurring";
 import { useLocale } from "@/components/locale-provider";
 import { categoryDisplayName } from "@/lib/i18n";
 
-type Category = { id: string; name: string; emoji: string; color: string; kind: "expense" | "income" };
+type Category = {
+  id: string;
+  name: string;
+  name_en: string | null;
+  emoji: string;
+  color: string;
+  kind: "expense" | "income";
+};
 
 export type UpcomingRow = {
   id: string;
@@ -21,6 +30,10 @@ export type UpcomingRow = {
   category_id: string;
   date: string;
   recurring_rule_id: string | null;
+  payment_url: string | null;
+  grace_days: number;
+  note: string | null;
+  is_automatic: boolean;
 };
 
 type DraftRow = {
@@ -167,7 +180,7 @@ export function UpcomingTable({
   return (
     <>
       <div className="overflow-x-auto rounded-[14px] border border-border bg-card">
-        <div className="min-w-[660px]">
+        <div className="min-w-175">
           {rows.length === 0 && drafts.length === 0 && (
             <div className="px-4 py-10 text-center text-sm text-muted-foreground">{t.noUpcoming}</div>
           )}
@@ -178,31 +191,59 @@ export function UpcomingTable({
             return (
               <div
                 key={row.id}
-                className={`grid grid-cols-[32px_1.6fr_1.2fr_100px_100px_36px] items-center gap-1 px-2 py-2 text-sm ${i > 0 ? "border-t border-border" : ""}`}
+                className={`grid grid-cols-[32px_1.6fr_1.2fr_120px_100px_112px_36px] items-center gap-1 px-2 py-2 text-sm ${i > 0 ? "border-t border-border" : ""}`}
               >
                 <span
                   className="mx-auto flex h-6 w-6 items-center justify-center rounded-full border border-border"
                   style={{ color: row.kind === "expense" ? "var(--destructive)" : "var(--neatly-primary-dark)" }}
+                  aria-label={row.kind === "expense" ? t.expense : t.incomeOne}
                 >
-                  {row.kind === "expense" ? <Minus className="h-3.5 w-3.5" /> : <Plus className="h-3.5 w-3.5" />}
+                  {row.kind === "expense" ? (
+                    <ArrowUpRight className="h-3.5 w-3.5" />
+                  ) : (
+                    <ArrowDownLeft className="h-3.5 w-3.5" />
+                  )}
                 </span>
-                <span className="flex min-w-0 items-center gap-1.5 truncate">
-                  {row.title}
-                  {row.recurring_rule_id && <Repeat className="h-3 w-3 shrink-0 text-muted-foreground" />}
+                <span className="flex min-w-0 items-center gap-1.5">
+                  <span className="truncate">{row.title}</span>
+                  {row.recurring_rule_id && (
+                    <Repeat className="h-3 w-3 shrink-0 text-muted-foreground" aria-label={t.repeat} />
+                  )}
+                  {row.is_automatic && (
+                    <Zap
+                      className="h-3.5 w-3.5 shrink-0"
+                      style={{ color: "var(--neatly-primary-dark)" }}
+                      aria-label={t.automatic}
+                    />
+                  )}
+                  {row.note && <NotePopover note={row.note} />}
                 </span>
                 <span className="flex min-w-0 items-center gap-1.5 truncate text-muted-foreground">
                   <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: cat?.color }} />
-                  {cat ? categoryDisplayName(cat.name, locale) : ""}
+                  {cat ? categoryDisplayName(cat.name, locale, cat.name_en) : ""}
                 </span>
                 <span className="text-xs" style={{ color: late ? "var(--destructive)" : "var(--muted-foreground)" }}>
                   {shortDate(row.date, locale)}
                   {late && ` ${t.overdue}`}
                 </span>
                 <span className="tabular text-right font-medium">{money(row.amount_cents, locale)}</span>
+                <span className="flex justify-end">
+                  {row.payment_url && (
+                    <a
+                      href={row.payment_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex min-w-0 items-center gap-1 truncate rounded-full px-2.5 py-2 text-xs font-medium sm:py-1"
+                      style={payNowStyle(paymentStatus(row.date, row.grace_days, today))}
+                    >
+                      <ExternalLink className="h-3 w-3 shrink-0" /> {t.payNow}
+                    </a>
+                  )}
+                </span>
                 <button
                   type="button"
                   onClick={() => togglePaid(row)}
-                  className="mx-auto flex h-5 w-5 items-center justify-center rounded-[6px] border border-border"
+                  className="tap-target mx-auto flex h-5 w-5 shrink-0 items-center justify-center rounded-[6px] border border-border"
                   aria-label={row.kind === "income" ? t.received : t.paid}
                 />
               </div>
@@ -216,7 +257,7 @@ export function UpcomingTable({
             return (
               <div
                 key={r.key}
-                className="grid grid-cols-[32px_1.6fr_1.2fr_120px_100px_36px_44px] items-center gap-1 border-t border-border bg-muted/40 px-2 py-1.5 text-sm"
+                className="grid grid-cols-[32px_1.6fr_1.2fr_120px_100px_112px_36px] items-center gap-1 border-t border-border bg-muted/40 px-2 py-1.5 text-sm"
               >
                 <button
                   type="button"
@@ -224,10 +265,15 @@ export function UpcomingTable({
                     const k = r.kind === "expense" ? "income" : "expense";
                     update(i, { kind: k, categoryId: catsOf(k)[0]?.id ?? "" });
                   }}
-                  className="mx-auto flex h-6 w-6 items-center justify-center rounded-full border border-border"
+                  className="tap-target mx-auto flex h-6 w-6 items-center justify-center rounded-full border border-border"
                   style={{ color: r.kind === "expense" ? "var(--destructive)" : "var(--neatly-primary-dark)" }}
+                  aria-label={r.kind === "expense" ? t.expense : t.incomeOne}
                 >
-                  {r.kind === "expense" ? <Minus className="h-3.5 w-3.5" /> : <Plus className="h-3.5 w-3.5" />}
+                  {r.kind === "expense" ? (
+                    <ArrowUpRight className="h-3.5 w-3.5" />
+                  ) : (
+                    <ArrowDownLeft className="h-3.5 w-3.5" />
+                  )}
                 </button>
 
                 <div className="flex min-w-0 items-center gap-1">
@@ -252,7 +298,7 @@ export function UpcomingTable({
                   >
                     {catsOf(r.kind).map((c) => (
                       <option key={c.id} value={c.id}>
-                        {c.emoji} {categoryDisplayName(c.name, locale)}
+                        {c.emoji} {categoryDisplayName(c.name, locale, c.name_en)}
                       </option>
                     ))}
                   </select>
@@ -274,10 +320,30 @@ export function UpcomingTable({
                   className="tabular w-full rounded-sm bg-transparent text-right text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 />
 
+                <div className="flex items-center justify-end gap-1">
+                  <button
+                    type="button"
+                    onClick={() => setRecIdx(i)}
+                    className="flex h-9 w-9 items-center justify-center rounded-md sm:h-7 sm:w-7"
+                    style={cyclic ? { color: "var(--primary)", background: "var(--neatly-primary-soft)" } : { color: "var(--muted-foreground)" }}
+                    aria-label={t.recurrence}
+                  >
+                    <MoreVertical className="h-3.5 w-3.5" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => removeRow(i)}
+                    className="flex h-9 w-9 items-center justify-center rounded-md text-muted-foreground sm:h-7 sm:w-7"
+                    aria-label={t.clearRow}
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+
                 <button
                   type="button"
                   onClick={() => update(i, { isPaid: !r.isPaid })}
-                  className="mx-auto flex h-5 w-5 items-center justify-center rounded-[6px] border"
+                  className="tap-target mx-auto flex h-5 w-5 items-center justify-center rounded-[6px] border"
                   style={{
                     borderColor: r.isPaid ? "var(--primary)" : "var(--border)",
                     background: r.isPaid ? "var(--primary)" : "transparent",
@@ -285,21 +351,6 @@ export function UpcomingTable({
                 >
                   {r.isPaid && <Check className="h-3 w-3 text-primary-foreground" />}
                 </button>
-
-                <div className="flex items-center justify-end gap-0.5">
-                  <button
-                    type="button"
-                    onClick={() => setRecIdx(i)}
-                    className="rounded-md p-1"
-                    style={cyclic ? { color: "var(--primary)", background: "var(--neatly-primary-soft)" } : { color: "var(--muted-foreground)" }}
-                    aria-label={t.recurrence}
-                  >
-                    <MoreVertical className="h-3.5 w-3.5" />
-                  </button>
-                  <button type="button" onClick={() => removeRow(i)} className="p-1 text-muted-foreground" aria-label={t.clearRow}>
-                    <X className="h-3.5 w-3.5" />
-                  </button>
-                </div>
               </div>
             );
           })}
@@ -314,7 +365,12 @@ export function UpcomingTable({
       </div>
 
       <div className="mt-2 flex flex-wrap items-center gap-3">
-        <button type="button" onClick={addRow} className="flex items-center gap-1.5 text-sm" style={{ color: "var(--neatly-primary-dark)" }}>
+        <button
+          type="button"
+          onClick={addRow}
+          className="flex min-h-11 items-center gap-1.5 text-sm sm:min-h-0"
+          style={{ color: "var(--neatly-primary-dark)" }}
+        >
           <Plus className="h-3.5 w-3.5" /> {t.addRow}
         </button>
         {drafts.length > 0 && (

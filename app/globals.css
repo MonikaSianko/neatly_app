@@ -63,6 +63,8 @@
   --neatly-primary-dark: #4147CB;
   --neatly-primary-soft: #E0E8FF;
   --neatly-danger-soft: #FFE8E6;
+  --neatly-success: #1E9E6B;
+  --neatly-success-soft: #DFF5EA;
 
   --neatly-cat-01: #5865F2; --neatly-cat-02: #6389DE; --neatly-cat-03: #4390DA;
   --neatly-cat-04: #0099CF; --neatly-cat-05: #009EC4; --neatly-cat-06: #00A3AC;
@@ -154,10 +156,47 @@
   .tabular {
     font-variant-numeric: tabular-nums;
   }
-  button:not(:disabled) {
+  button:not(:disabled),
+  a[href],
+  label,
+  select,
+  summary,
+  [role="button"],
+  [role="tab"],
+  [role="menuitem"],
+  [role="menuitemradio"],
+  input[type="checkbox"],
+  input[type="radio"],
+  input[type="date"],
+  input[type="file"] {
     cursor: pointer;
   }
-  button:disabled {
+  button:disabled,
+  select:disabled,
+  input:disabled {
     cursor: not-allowed;
+  }
+}
+
+@layer utilities {
+  /* Powieksza obszar dotyku do 44px (wytyczne Apple HIG / Material) bez zmiany layoutu. */
+  .tap-target {
+    position: relative;
+  }
+  .tap-target::after {
+    content: "";
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: max(100%, 44px);
+    height: max(100%, 44px);
+    transform: translate(-50%, -50%);
+  }
+  /* Na wskazniku precyzyjnym (mysz) obszar dotyku nie jest potrzebny i moze lapac klikniecia sasiadow. */
+  @media (pointer: fine) {
+    .tap-target::after {
+      width: 100%;
+      height: 100%;
+    }
   }
 }

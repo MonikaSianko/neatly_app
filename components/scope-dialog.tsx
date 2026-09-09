@@ -9,18 +9,20 @@ export function ScopeDialog({
   open,
   onOpenChange,
   title,
+  mode = "edit",
   onPick,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   title: string;
+  mode?: "edit" | "delete";
   onPick: (scope: Scope) => void;
 }) {
   const { t } = useLocale();
   const options: { value: Scope; label: string; hint: string }[] = [
     { value: "this", label: t.scopeThis, hint: t.scopeThisH },
     { value: "future", label: t.scopeFuture, hint: t.scopeFutureH },
-    { value: "all", label: t.scopeAll, hint: t.scopeAllH },
+    { value: "all", label: t.scopeAll, hint: mode === "delete" ? t.scopeAllHDel : t.scopeAllH },
   ];
 
   return (
@@ -36,7 +38,7 @@ export function ScopeDialog({
               key={opt.value}
               type="button"
               onClick={() => onPick(opt.value)}
-              className="rounded-[10px] border border-border p-3 text-left hover:bg-muted"
+              className="min-h-11 rounded-[10px] border border-border p-3 text-left hover:bg-muted"
             >
               <div className="text-sm font-medium">{opt.label}</div>
               <div className="text-xs text-muted-foreground">{opt.hint}</div>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useOptimistic, useState, useTransition } from "react";
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import { ChevronDown, Check, Plus } from "lucide-react";
 import {
@@ -35,18 +35,25 @@ export function WalletSwitcher({
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const { t } = useLocale();
-  const active = wallets.find((w) => w.id === activeWalletId);
 
   const [creating, setCreating] = useState(false);
   const [name, setName] = useState("");
   const [emoji, setEmoji] = useState("📁");
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
+  const [navPending, startNav] = useTransition();
+  // Nazwa portfela zmienia sie od razu po kliknieciu, a dane doladowuja sie pod szkieletem.
+  // useOptimistic sam wraca do wartosci z URL, wiec przycisk "wstecz" nie zostawia stalej nazwy.
+  const [optimisticWalletId, setOptimisticWalletId] = useOptimistic(activeWalletId);
+  const active = wallets.find((w) => w.id === optimisticWalletId);
 
   function select(id: string) {
     const params = new URLSearchParams(searchParams.toString());
     params.set("wallet", id);
-    router.push(`${pathname}?${params.toString()}`);
+    startNav(() => {
+      setOptimisticWalletId(id);
+      router.push(`${pathname}?${params.toString()}`);
+    });
   }
 
   function submitCreate(e: React.FormEvent) {
@@ -71,10 +78,11 @@ export function WalletSwitcher({
         <DropdownMenuTrigger asChild>
           <button
             type="button"
-            className="flex shrink-0 items-center gap-1 rounded-[10px] border border-border bg-card px-2.5 py-1.5 text-sm font-medium sm:px-3"
+            className="flex min-h-9 shrink-0 items-center gap-1 rounded-[10px] border border-border bg-card px-2.5 text-sm font-medium transition-opacity sm:min-h-8 sm:px-3"
+            style={{ opacity: navPending ? 0.6 : 1 }}
           >
             <span aria-hidden>{active?.emoji}</span>
-            <span className="hidden max-w-[9rem] truncate sm:inline">{active?.name}</span>
+            <span className="hidden max-w-36 truncate sm:inline">{active?.name}</span>
             <ChevronDown className="h-4 w-4 text-muted-foreground" />
           </button>
         </DropdownMenuTrigger>
@@ -83,7 +91,7 @@ export function WalletSwitcher({
             <DropdownMenuItem key={w.id} onClick={() => select(w.id)}>
               <span aria-hidden>{w.emoji}</span>
               <span className="flex-1 truncate">{w.name}</span>
-              {w.id === activeWalletId && <Check className="h-4 w-4" />}
+              {w.id === active?.id && <Check className="h-4 w-4" />}
             </DropdownMenuItem>
           ))}
           <DropdownMenuSeparator />

@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Minus, Plus } from "lucide-react";
+import { Minus, Plus, Zap } from "lucide-react";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { createTransaction, updateTransaction, deleteTransaction } from "@/lib/actions/transactions";
 import {
@@ -16,7 +16,7 @@ import { parseAmountToCents } from "@/lib/format";
 import { useLocale } from "@/components/locale-provider";
 import { WEEKDAYS, categoryDisplayName } from "@/lib/i18n";
 
-type Category = { id: string; name: string; emoji: string; kind: "expense" | "income" };
+type Category = { id: string; name: string; name_en: string | null; emoji: string; kind: "expense" | "income" };
 
 export type EditingRule = {
   freq: "day" | "week" | "month" | "year";
@@ -33,6 +33,10 @@ export type EditingTransaction = {
   categoryId: string;
   date: string;
   isPaid: boolean;
+  paymentUrl: string | null;
+  graceDays: number;
+  note: string | null;
+  isAutomatic: boolean;
   recurringRuleId: string | null;
   rule?: EditingRule | null;
 };
@@ -114,6 +118,10 @@ function TransactionFormFields({
   const [categoryId, setCategoryId] = useState(editing?.categoryId ?? "");
   const [date, setDate] = useState(editing?.date ?? defaultDate);
   const [isPaid, setIsPaid] = useState(editing?.isPaid ?? false);
+  const [paymentUrl, setPaymentUrl] = useState(editing?.paymentUrl ?? "");
+  const [graceDays, setGraceDays] = useState(String(editing?.graceDays ?? 0));
+  const [note, setNote] = useState(editing?.note ?? "");
+  const [isAutomatic, setIsAutomatic] = useState(editing?.isAutomatic ?? false);
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
 
@@ -169,9 +177,24 @@ function TransactionFormFields({
     }
 
     const p = pattern();
+    const normalizedPaymentUrl = paymentUrl.trim() || null;
+    const normalizedGraceDays = Math.max(0, Number(graceDays) || 0);
+    const normalizedNote = note.trim() || null;
 
     if (isEditingRecurring) {
-      setPendingInput({ kind, title, amountCents, categoryId, date, isPaid, pattern: p ?? currentRuleAsPattern() });
+      setPendingInput({
+        kind,
+        title,
+        amountCents,
+        categoryId,
+        date,
+        isPaid,
+        paymentUrl: normalizedPaymentUrl,
+        graceDays: normalizedGraceDays,
+        note: normalizedNote,
+        isAutomatic,
+        pattern: p ?? currentRuleAsPattern(),
+      });
       setScopeOpen(true);
       return;
     }
@@ -181,14 +204,60 @@ function TransactionFormFields({
       if (editing) {
         if (p) {
           await deleteTransaction(editing.id);
-          result = await createRecurringEntry(householdId, walletId, { kind, title, amountCents, categoryId, date, isPaid, pattern: p });
+          result = await createRecurringEntry(householdId, walletId, {
+            kind,
+            title,
+            amountCents,
+            categoryId,
+            date,
+            isPaid,
+            paymentUrl: normalizedPaymentUrl,
+            graceDays: normalizedGraceDays,
+            note: normalizedNote,
+            isAutomatic,
+            pattern: p,
+          });
         } else {
-          result = await updateTransaction(editing.id, { kind, title, amountCents, categoryId, date, isPaid });
+          result = await updateTransaction(editing.id, {
+            kind,
+            title,
+            amountCents,
+            categoryId,
+            date,
+            isPaid,
+            paymentUrl: normalizedPaymentUrl,
+            graceDays: normalizedGraceDays,
+            note: normalizedNote,
+            isAutomatic,
+          });
         }
       } else {
         result = p
-          ? await createRecurringEntry(householdId, walletId, { kind, title, amountCents, categoryId, date, isPaid, pattern: p })
-          : await createTransaction(householdId, walletId, { kind, title, amountCents, categoryId, date, isPaid });
+          ? await createRecurringEntry(householdId, walletId, {
+              kind,
+              title,
+              amountCents,
+              categoryId,
+              date,
+              isPaid,
+              paymentUrl: normalizedPaymentUrl,
+              graceDays: normalizedGraceDays,
+              note: normalizedNote,
+              isAutomatic,
+              pattern: p,
+            })
+          : await createTransaction(householdId, walletId, {
+              kind,
+              title,
+              amountCents,
+              categoryId,
+              date,
+              isPaid,
+              paymentUrl: normalizedPaymentUrl,
+              graceDays: normalizedGraceDays,
+              note: normalizedNote,
+              isAutomatic,
+            });
       }
       if (result.error) {
         setError(result.error);
@@ -273,7 +342,7 @@ function TransactionFormFields({
             <option value="">{t.category}</option>
             {filteredCategories.map((c) => (
               <option key={c.id} value={c.id}>
-                {c.emoji} {categoryDisplayName(c.name, locale)}
+                {c.emoji} {categoryDisplayName(c.name, locale, c.name_en)}
               </option>
             ))}
           </select>
@@ -395,7 +464,42 @@ function TransactionFormFields({
           </div>
         )}
 
-        <label className="flex items-center gap-2 text-sm">
+        <div>
+          <label className="mb-1.5 block text-sm font-medium">{t.noteOptional}</label>
+          <textarea
+            value={note}
+            onChange={(e) => setNote(e.target.value)}
+            rows={2}
+            className="w-full resize-y rounded-[10px] border border-border bg-muted px-3 py-2 text-sm"
+          />
+        </div>
+
+        <div>
+          <label className="mb-1.5 block text-sm font-medium">{t.paymentUrlOptional}</label>
+          <input
+            type="url"
+            value={paymentUrl}
+            onChange={(e) => setPaymentUrl(e.target.value)}
+            placeholder="https://…"
+            className="w-full rounded-[10px] border border-border bg-muted px-3 py-2 text-sm"
+          />
+        </div>
+
+        {paymentUrl.trim() && (
+          <div>
+            <label className="mb-1.5 block text-sm font-medium">{t.graceDays}</label>
+            <input
+              type="number"
+              min={0}
+              value={graceDays}
+              onChange={(e) => setGraceDays(e.target.value)}
+              className="w-24 rounded-[10px] border border-border bg-muted px-3 py-2 text-sm"
+            />
+            <p className="mt-1 text-xs text-muted-foreground">{t.graceDaysHint}</p>
+          </div>
+        )}
+
+        <label className="flex min-h-11 items-center gap-2 text-sm sm:min-h-0">
           <input
             type="checkbox"
             checked={isPaid}
@@ -404,6 +508,20 @@ function TransactionFormFields({
           />
           {kind === "income" ? t.received : t.paid}
         </label>
+
+        <div>
+          <label className="flex min-h-11 items-center gap-2 text-sm sm:min-h-0">
+            <input
+              type="checkbox"
+              checked={isAutomatic}
+              onChange={(e) => setIsAutomatic(e.target.checked)}
+              className="h-4 w-4 rounded-[6px]"
+            />
+            <Zap className="h-4 w-4 text-muted-foreground" />
+            {t.automatic}
+          </label>
+          <p className="mt-1 text-xs text-muted-foreground">{t.automaticHint}</p>
+        </div>
 
         {error && <p className="text-xs" style={{ color: "var(--destructive)" }}>{error}</p>}
 

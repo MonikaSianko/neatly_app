@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
+import type { Locale } from "@/lib/i18n";
 
 export type CategoryKind = "expense" | "income";
 
@@ -17,9 +18,11 @@ export async function createCategory(householdId: string, position: number, inpu
   if (!trimmed) return { error: "Podaj nazwę kategorii." };
 
   const supabase = await createClient();
+  // Nowa kategoria startuje z ta sama nazwa w obu jezykach — dopiero edycja je rozdziela.
   const { error } = await supabase.from("categories").insert({
     household_id: householdId,
     name: trimmed,
+    name_en: trimmed,
     emoji: input.emoji,
     color: input.color,
     kind: input.kind,
@@ -31,14 +34,23 @@ export async function createCategory(householdId: string, position: number, inpu
   return { error: null };
 }
 
-export async function updateCategory(id: string, input: Pick<CategoryInput, "name" | "emoji" | "color">) {
+/** Nazwa zapisuje sie tylko w aktywnym jezyku; drugi zostaje nietkniety. */
+export async function updateCategory(
+  id: string,
+  input: Pick<CategoryInput, "name" | "emoji" | "color">,
+  locale: Locale
+) {
   const trimmed = input.name.trim();
   if (!trimmed) return { error: "Podaj nazwę kategorii." };
 
   const supabase = await createClient();
   const { error } = await supabase
     .from("categories")
-    .update({ name: trimmed, emoji: input.emoji, color: input.color })
+    .update({
+      ...(locale === "en" ? { name_en: trimmed } : { name: trimmed }),
+      emoji: input.emoji,
+      color: input.color,
+    })
     .eq("id", id);
 
   if (error) return { error: error.message };

@@ -5,10 +5,10 @@ export const STR = {
     wallet: "Portfel", newWallet: "Nowy portfel", createWallet: "Utwórz portfel", walletName: "Nazwa",
     icon: "Ikona", expenses: "Wydatki", income: "Przychody", expense: "Wydatek", incomeOne: "Przychód",
     upcoming: "Nadchodzące", noUpcoming: "Nic nie czeka na opłacenie w tym miesiącu.",
-    opening: "Stan początkowy", closing: "Stan konta na koniec miesiąca",
+    opening: "Stan początkowy",
     editOpening: "Stan początkowy miesiąca", carryPrev: "Przenieś z poprzedniego miesiąca",
     openingHint: "Ile masz na koncie pierwszego dnia miesiąca. Nic nie przenosi się automatycznie — wpisujesz albo przenosisz jednym kliknięciem.",
-    balance: "Balans miesiąca", actualBalance: "Faktyczny balans",
+    balance: "Balans miesiąca", accountBalance: "Stan konta",
     budgets: "Budżety wydatków", setBudget: "Ustaw budżet", editBudget: "Edytuj budżet", newBudget: "Nowy budżet wydatków",
     budgetsEmpty: "Przypisz miesięczny limit do kategorii, żeby zarezerwować na nią pieniądze w tym portfelu.",
     copyPrev: "Skopiuj budżety z poprzedniego miesiąca", limitMonth: "Limit na miesiąc (PLN)",
@@ -26,7 +26,8 @@ export const STR = {
     scopeIntro: "Ta pozycja należy do serii. Wybierz, czego ma dotyczyć zmiana.",
     scopeThis: "To wystąpienie", scopeThisH: "Pozostałe raty zostają bez zmian.",
     scopeFuture: "To i przyszłe", scopeFutureH: "Wcześniejsze raty zostają nietknięte.",
-    scopeAll: "Wszystkie", scopeAllH: "Opłacone raty i ręczne wyjątki zostają zachowane.",
+    scopeAll: "Wszystkie", scopeAllH: "Zmienia całą serię; ręcznie edytowane raty zostają bez zmian.",
+    scopeAllHDel: "Usuwa całą serię, razem z opłaconymi ratami.",
     categories: "Kategorie", newCategory: "Nowa kategoria", saveCategory: "Zapisz kategorię",
     color: "Kolor", archived: "Zarchiwizowane", restore: "Przywróć",
     household: "Gospodarstwo domowe", members: "Członkowie", inviteCode: "Kod zaproszenia",
@@ -39,15 +40,25 @@ export const STR = {
     netTotal: "suma netto",
     language: "Język", logout: "Wyloguj",
     signInGoogle: "Zaloguj przez Google", tagline: "Budżet rodzinny",
+    paymentUrl: "Link do płatności", paymentUrlOptional: "Link do płatności (opcjonalnie)",
+    graceDays: "Dni karencji",
+    graceDaysHint: "Ile dni po terminie płatność może czekać, zanim uznamy ją za przeterminowaną.",
+    payNow: "Zapłać teraz",
+    note: "Notatka", noteOptional: "Notatka (opcjonalnie)", showNote: "Pokaż notatkę",
+    account: "Konto", close: "Zamknij", back: "Wróć do budżetu",
+    categoryNameHint: "Zmieniasz nazwę tylko w aktywnym języku. Żeby zmienić angielską, przełącz język na angielski.",
+    automatic: "Pobierana automatycznie",
+    automaticHint:
+      "Pieniądze schodzą same (polecenie zapłaty, subskrypcja z karty). Pozycja oznaczy się jako opłacona w dniu płatności — do tego dnia czeka w Nadchodzących.",
   },
   en: {
     wallet: "Wallet", newWallet: "New wallet", createWallet: "Create wallet", walletName: "Name",
     icon: "Icon", expenses: "Expenses", income: "Income", expense: "Expense", incomeOne: "Income",
     upcoming: "Upcoming", noUpcoming: "Nothing waiting to be paid this month.",
-    opening: "Opening balance", closing: "Account at month end",
+    opening: "Opening balance",
     editOpening: "Opening balance", carryPrev: "Carry over from last month",
     openingHint: "What sits in the account on day one of the month. Nothing carries over on its own — type it in or carry it over in one click.",
-    balance: "Month balance", actualBalance: "Actual balance",
+    balance: "Month balance", accountBalance: "Account balance",
     budgets: "Spending budgets", setBudget: "Set budget", editBudget: "Edit budget", newBudget: "New spending budget",
     budgetsEmpty: "Give a category a monthly limit to reserve money for it in this wallet.",
     copyPrev: "Copy budgets from last month", limitMonth: "Monthly limit (PLN)",
@@ -65,7 +76,8 @@ export const STR = {
     scopeIntro: "This entry belongs to a series. Choose what the change applies to.",
     scopeThis: "This entry", scopeThisH: "Other entries stay as they are.",
     scopeFuture: "This and future", scopeFutureH: "Earlier entries stay untouched.",
-    scopeAll: "All entries", scopeAllH: "Paid entries and manual exceptions are kept.",
+    scopeAll: "All entries", scopeAllH: "Changes the whole series; manually edited entries stay as they are.",
+    scopeAllHDel: "Deletes the whole series, paid entries included.",
     categories: "Categories", newCategory: "New category", saveCategory: "Save category",
     color: "Colour", archived: "Archived", restore: "Restore",
     household: "Household", members: "Members", inviteCode: "Invite code",
@@ -78,6 +90,16 @@ export const STR = {
     netTotal: "net total",
     language: "Language", logout: "Log out",
     signInGoogle: "Sign in with Google", tagline: "Family Budget",
+    paymentUrl: "Payment link", paymentUrlOptional: "Payment link (optional)",
+    graceDays: "Grace days",
+    graceDaysHint: "How many days past the due date before this counts as overdue.",
+    payNow: "Pay now",
+    note: "Note", noteOptional: "Note (optional)", showNote: "Show note",
+    account: "Account", close: "Close", back: "Back to budget",
+    categoryNameHint: "You are editing the name in the active language only. To change the Polish one, switch the language first.",
+    automatic: "Charged automatically",
+    automaticHint:
+      "The money leaves on its own (direct debit, card subscription). It marks itself paid on the payment date — until then it waits in Upcoming.",
   },
 } as const;
 
@@ -94,9 +116,14 @@ export const CAT_EN: Record<string, string> = {
   "Prezent": "Gift", "Sprzedaż": "Sale",
 };
 
-export function categoryDisplayName(name: string, locale: Locale): string {
-  if (locale === "en" && CAT_EN[name]) return CAT_EN[name];
-  return name;
+/**
+ * Kazdy jezyk ma wlasna nazwe kategorii w bazie (name / name_en), wiec zmiana nazwy
+ * w jednym jezyku nie rusza drugiego. CAT_EN zostaje tylko jako zapasowe tlumaczenie
+ * kategorii startowych, gdyby wiersz nie mial jeszcze name_en.
+ */
+export function categoryDisplayName(name: string, locale: Locale, nameEn?: string | null): string {
+  if (locale !== "en") return name;
+  return nameEn?.trim() || CAT_EN[name] || name;
 }
 
 export function t(locale: Locale): Dict {

@@ -11,6 +11,10 @@ export type TransactionInput = {
   categoryId: string;
   date: string;
   isPaid: boolean;
+  paymentUrl: string | null;
+  graceDays: number;
+  note: string | null;
+  isAutomatic: boolean;
 };
 
 export async function createTransaction(householdId: string, walletId: string, input: TransactionInput) {
@@ -30,6 +34,10 @@ export async function createTransaction(householdId: string, walletId: string, i
     date: input.date,
     is_paid: input.isPaid,
     paid_at: input.isPaid ? new Date().toISOString() : null,
+    payment_url: input.paymentUrl,
+    grace_days: input.graceDays,
+    note: input.note,
+    is_automatic: input.isAutomatic,
   });
 
   if (error) return { error: error.message };
@@ -53,6 +61,10 @@ export async function updateTransaction(id: string, input: TransactionInput) {
       category_id: input.categoryId,
       date: input.date,
       is_paid: input.isPaid,
+      payment_url: input.paymentUrl,
+      grace_days: input.graceDays,
+      note: input.note,
+      is_automatic: input.isAutomatic,
     })
     .eq("id", id);
 

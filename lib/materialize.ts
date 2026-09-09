@@ -21,7 +21,9 @@ export async function ensureMonthMaterialized(
 
   const { data: rules } = await supabase
     .from("recurring_rules")
-    .select("id, kind, title, amount_cents, category_id, freq, interval, weekdays, start_date, until_date")
+    .select(
+      "id, kind, title, amount_cents, category_id, freq, interval, weekdays, start_date, until_date, payment_url, grace_days, note, is_automatic"
+    )
     .eq("household_id", householdId)
     .eq("wallet_id", walletId)
     .lte("start_date", range.to);
@@ -64,6 +66,10 @@ export async function ensureMonthMaterialized(
         is_paid: false,
         recurring_rule_id: rule.id,
         is_exception: false,
+        payment_url: rule.payment_url,
+        grace_days: rule.grace_days,
+        note: rule.note,
+        is_automatic: rule.is_automatic,
       }));
   });
 
@@ -72,4 +78,32 @@ export async function ensureMonthMaterialized(
   // Ostatnia linia obrony: unikalny indeks (recurring_rule_id, date)
   // odrzuci ewentualny wyscig; blad wtedy jest nieszkodliwy.
   await supabase.from("transactions").insert(rows);
+}
+
+/**
+ * Przy platnosci pobieranej automatycznie znacznik oplacenia wynika z daty: pieniadze schodza
+ * same w dniu platnosci, wiec wtedy pozycja robi sie oplacona, a wczesniej czeka w "Nadchodzacych".
+ * Dziala w obie strony, zeby data zawsze rozstrzygala. Wywolywane leniwie przy renderze,
+ * tak samo jak materializacja regul cyklicznych.
+ */
+export async function settleAutomaticPayments(
+  supabase: SupabaseClient,
+  householdId: string,
+  today: string
+): Promise<void> {
+  await supabase
+    .from("transactions")
+    .update({ is_paid: true, paid_at: new Date().toISOString() })
+    .eq("household_id", householdId)
+    .eq("is_automatic", true)
+    .eq("is_paid", false)
+    .lte("date", today);
+
+  await supabase
+    .from("transactions")
+    .update({ is_paid: false, paid_at: null })
+    .eq("household_id", householdId)
+    .eq("is_automatic", true)
+    .eq("is_paid", true)
+    .gt("date", today);
 }
