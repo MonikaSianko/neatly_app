@@ -2,7 +2,7 @@
 export function MonthSkeleton() {
   return (
     <>
-      <aside className="order-1 flex flex-col gap-4 md:order-2" aria-hidden>
+      <aside className="order-1 flex flex-col gap-4 xl:order-2" aria-hidden>
         <section className="rounded-[14px] border border-border bg-card p-4">
           <div className="h-4 w-32 animate-pulse rounded bg-muted" />
           <div className="mt-3 grid grid-cols-2 gap-3">
@@ -24,7 +24,7 @@ export function MonthSkeleton() {
         </section>
       </aside>
 
-      <section className="order-2 flex flex-col gap-3 md:order-1" aria-busy>
+      <section className="order-2 flex flex-col gap-3 xl:order-1" aria-busy>
         <div className="h-10 w-64 animate-pulse rounded-full bg-muted" />
         <div className="rounded-[14px] border border-border bg-card">
           {Array.from({ length: 4 }, (_, i) => (

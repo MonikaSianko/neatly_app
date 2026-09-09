@@ -157,7 +157,7 @@ export async function MonthContent({
   return (
     <>
       {/* Prawa kolumna na mobile jest u góry */}
-      <aside className="order-1 flex flex-col gap-4 md:order-2">
+      <aside className="order-1 flex flex-col gap-4 xl:order-2">
         <SummaryCard
           summary={summary}
           opening={
@@ -175,7 +175,7 @@ export async function MonthContent({
       </aside>
 
       {/* Lewa kolumna: zakładki */}
-      <section className="order-2 flex flex-col gap-3 md:order-1">
+      <section className="order-2 flex flex-col gap-3 xl:order-1">
         <MonthTabs
           initialTab={activeTab}
           labels={{ upcoming: dict.upcoming, expense: dict.expenses, income: dict.income }}

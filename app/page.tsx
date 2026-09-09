@@ -6,7 +6,7 @@ import { MonthSkeleton } from "@/components/month-skeleton";
 import { FabAddButton } from "@/components/fab-add-button";
 import { createClient } from "@/lib/supabase/server";
 import { parseMonthParam, monthKey, monthRange, isoToday } from "@/lib/month";
-import { type Locale } from "@/lib/i18n";
+import { resolveLocale } from "@/lib/locale";
 
 export default async function Home({
   searchParams,
@@ -27,7 +27,7 @@ export default async function Home({
 
   const householdId = profile?.active_household_id;
   if (!householdId) redirect("/household");
-  const locale: Locale = profile?.locale === "en" ? "en" : "pl";
+  const locale = await resolveLocale(profile?.locale);
 
   const [{ data: wallets }, { data: categories }] = await Promise.all([
     supabase
@@ -66,7 +66,8 @@ export default async function Home({
         ym={ym}
       />
 
-      <main className="mx-auto flex w-full max-w-[1600px] flex-1 flex-col gap-4 px-2 py-4 md:grid md:grid-cols-[1fr_320px] md:items-start md:gap-5 md:px-4 md:py-5">
+      {/* Boczna kolumna dopiero od xl: wczesniej zabierala 320px i tabela nie miala gdzie sie zmiescic. */}
+      <main className="mx-auto flex w-full max-w-[1600px] flex-1 flex-col gap-4 px-2 py-4 md:px-4 md:py-5 xl:grid xl:grid-cols-[1fr_320px] xl:items-start xl:gap-5">
         {/* Klucz przelacza granice przy zmianie portfela/miesiaca, wiec szkielet pojawia sie od razu. */}
         <Suspense key={`${activeWalletId}-${monthKey(ym)}`} fallback={<MonthSkeleton />}>
           <MonthContent

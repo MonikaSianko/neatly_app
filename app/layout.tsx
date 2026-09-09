@@ -3,7 +3,7 @@ import { Noto_Sans_JP } from "next/font/google";
 import "./globals.css";
 import { LocaleProvider } from "@/components/locale-provider";
 import { createClient } from "@/lib/supabase/server";
-import type { Locale } from "@/lib/i18n";
+import { resolveLocale } from "@/lib/locale";
 
 const notoSansJP = Noto_Sans_JP({
   variable: "--font-sans",
@@ -28,11 +28,12 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
     data: { user },
   } = await supabase.auth.getUser();
 
-  let locale: Locale = "pl";
+  let profileLocale: string | null = null;
   if (user) {
     const { data: profile } = await supabase.from("profiles").select("locale").eq("user_id", user.id).single();
-    if (profile?.locale === "en") locale = "en";
+    profileLocale = profile?.locale ?? null;
   }
+  const locale = await resolveLocale(profileLocale);
 
   return (
     <html lang={locale} className={`${notoSansJP.variable} h-full antialiased`}>

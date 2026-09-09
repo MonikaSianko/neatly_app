@@ -2,7 +2,6 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
-import { addMonthsClamped } from "@/lib/month";
 
 export type TransactionInput = {
   kind: "expense" | "income";
@@ -81,23 +80,3 @@ export async function deleteTransaction(id: string) {
   return { error: null };
 }
 
-export async function moveTransactionToNextMonth(id: string, currentDate: string) {
-  const supabase = await createClient();
-  const { data: current } = await supabase
-    .from("transactions")
-    .select("recurring_rule_id")
-    .eq("id", id)
-    .single();
-
-  const { error } = await supabase
-    .from("transactions")
-    .update({
-      date: addMonthsClamped(currentDate, 1),
-      ...(current?.recurring_rule_id ? { is_exception: true } : {}),
-    })
-    .eq("id", id);
-
-  if (error) return { error: error.message };
-  revalidatePath("/");
-  return { error: null };
-}

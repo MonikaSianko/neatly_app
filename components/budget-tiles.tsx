@@ -118,12 +118,12 @@ export function BudgetTiles({
                 }
                 className="rounded-[10px] border border-border p-3 text-left"
               >
-                <div className="flex items-center justify-between text-base">
-                  <span className="flex items-center gap-1.5 font-medium">
-                    <span aria-hidden>{cat?.emoji}</span>
-                    {cat ? categoryDisplayName(cat.name, locale, cat.name_en) : ""}
+                <div className="flex items-center justify-between gap-2 text-base">
+                  <span className="flex min-w-0 items-center gap-1.5 font-medium">
+                    <span aria-hidden className="shrink-0">{cat?.emoji}</span>
+                    <span className="truncate">{cat ? categoryDisplayName(cat.name, locale, cat.name_en) : ""}</span>
                   </span>
-                  <span className="tabular text-sm text-muted-foreground">
+                  <span className="tabular shrink-0 text-right text-sm text-muted-foreground">
                     {money(row.spentCents, locale)} / {money(row.limitCents, locale)}
                   </span>
                 </div>

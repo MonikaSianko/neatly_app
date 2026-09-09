@@ -6,7 +6,6 @@ import {
   ChevronDown,
   MoreVertical,
   Pencil,
-  ArrowRightCircle,
   Trash2,
   ExternalLink,
   Repeat,
@@ -28,7 +27,7 @@ import {
 } from "@/components/transaction-form";
 import { NotePopover } from "@/components/note-popover";
 import { ScopeDialog, type Scope } from "@/components/scope-dialog";
-import { deleteTransaction, moveTransactionToNextMonth } from "@/lib/actions/transactions";
+import { deleteTransaction } from "@/lib/actions/transactions";
 import { deleteSplitTransaction, setSplitPaid } from "@/lib/actions/splits";
 import { deleteRecurringEntry } from "@/lib/actions/recurring";
 import { createClient } from "@/lib/supabase/client";
@@ -118,10 +117,6 @@ export function TransactionGroupList({
       return;
     }
     router.refresh();
-  }
-
-  function startMoveNext(id: string, date: string) {
-    moveTransactionToNextMonth(id, date).then(() => router.refresh());
   }
 
   function requestDelete(row: TxRow) {
@@ -249,10 +244,12 @@ export function TransactionGroupList({
                             href={row.payment_url}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="flex shrink-0 items-center gap-1 rounded-full px-2.5 py-2 text-sm font-medium sm:py-1"
+                            aria-label={t.payNow}
+                            className="tap-target flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-sm font-medium sm:h-auto sm:w-auto sm:gap-1 sm:px-2.5 sm:py-1"
                             style={payNowStyle(paymentStatus(row.date, row.grace_days, today))}
                           >
-                            <ExternalLink className="h-3 w-3" /> {t.payNow}
+                            <ExternalLink className="h-4 w-4 sm:h-3 sm:w-3" />
+                            <span className="hidden sm:inline">{t.payNow}</span>
                           </a>
                         )}
                         <span className="tabular text-base font-medium">{money(row.amount_cents, locale)}</span>
@@ -270,11 +267,6 @@ export function TransactionGroupList({
                             <DropdownMenuItem onClick={() => editRow(row, paid)}>
                               <Pencil className="h-4 w-4" /> {t.edit}
                             </DropdownMenuItem>
-                            {!row.split_group_id && (
-                              <DropdownMenuItem onClick={() => startMoveNext(row.id, row.date)}>
-                                <ArrowRightCircle className="h-4 w-4" /> {t.moveNext}
-                              </DropdownMenuItem>
-                            )}
                             <DropdownMenuItem variant="destructive" onClick={() => requestDelete(row)}>
                               <Trash2 className="h-4 w-4" /> {t.del}
                             </DropdownMenuItem>

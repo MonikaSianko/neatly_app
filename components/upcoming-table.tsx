@@ -14,7 +14,6 @@ import {
   ExternalLink,
   Zap,
   Pencil,
-  ArrowRightCircle,
   Trash2,
 } from "lucide-react";
 import { DraftRecurrenceDialog } from "@/components/draft-recurrence-dialog";
@@ -28,7 +27,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { TransactionForm, type EditingTransaction, type EditingRule } from "@/components/transaction-form";
 import { ScopeDialog, type Scope } from "@/components/scope-dialog";
-import { deleteTransaction, moveTransactionToNextMonth } from "@/lib/actions/transactions";
+import { deleteTransaction } from "@/lib/actions/transactions";
 import { deleteSplitTransaction, setSplitPaid } from "@/lib/actions/splits";
 import { deleteRecurringEntry } from "@/lib/actions/recurring";
 import { saveDraftRows, type DraftRowInput } from "@/lib/actions/drafts";
@@ -77,8 +76,12 @@ type PaymentGroup = {
 /** Data platnosci to termin, data dodania to moment wpisania pozycji — to dwie rozne rzeczy. */
 type SortKey = "date" | "created";
 
-/** Jedna siatka dla naglowka, wierszy danych i wierszy roboczych — inaczej kolumny sie rozjezdzaja. */
-const GRID = "grid grid-cols-[32px_1.6fr_1.2fr_120px_105px_125px_140px_36px_36px]";
+/**
+ * Jedna siatka dla naglowka, wierszy danych i wierszy roboczych — inaczej kolumny sie rozjezdzaja.
+ * Szerokosci dobrane tak, zeby tabela zmiescila sie bez przewijania w poziomie od lg w gore:
+ * przy lg (jedna kolumna) dostepne ~990px, przy xl (z panelem bocznym) ~910px.
+ */
+const GRID = "grid grid-cols-[28px_1.5fr_1.1fr_96px_92px_116px_120px_32px_32px]";
 
 type DraftRow = {
   key: string;
@@ -349,7 +352,7 @@ export function UpcomingTable({
       <div key={group.key} className={withBorder ? "border-t border-border" : ""}>
       {/* Telefon: dwie linie zamiast dziewieciu kolumn. Dotkniecie wiersza otwiera edycje,
           wiec nie ma osobnego menu obok checkboxa. */}
-      <div className={`flex items-center gap-2 px-3 py-2.5 sm:hidden ${paid ? "text-muted-foreground" : ""}`}>
+      <div className={`flex items-center gap-2 px-3 py-2.5 lg:hidden ${paid ? "text-muted-foreground" : ""}`}>
         <button type="button" onClick={() => openEdit(group)} className="min-w-0 flex-1 text-left">
           <span className="flex items-center gap-1.5">
             {split ? (
@@ -427,7 +430,7 @@ export function UpcomingTable({
       </div>
 
       <div
-        className={`${GRID} hidden items-center gap-1 px-2 py-2 text-base sm:grid ${paid ? "text-muted-foreground" : ""}`}
+        className={`${GRID} hidden items-center gap-1 px-2 py-2 text-base lg:grid ${paid ? "text-muted-foreground" : ""}`}
       >
         <span
           className="mx-auto flex h-6 w-6 items-center justify-center rounded-full border border-border"
@@ -523,13 +526,6 @@ export function UpcomingTable({
             <DropdownMenuItem onClick={() => openEdit(group)}>
               <Pencil className="h-4 w-4" /> {t.edit}
             </DropdownMenuItem>
-            {!split && (
-              <DropdownMenuItem
-                onClick={() => moveTransactionToNextMonth(row.id, row.date).then(() => router.refresh())}
-              >
-                <ArrowRightCircle className="h-4 w-4" /> {t.moveNext}
-              </DropdownMenuItem>
-            )}
             <DropdownMenuItem variant="destructive" onClick={() => requestDelete(group)}>
               <Trash2 className="h-4 w-4" /> {t.del}
             </DropdownMenuItem>
@@ -543,7 +539,7 @@ export function UpcomingTable({
             const partCat = categoryById.get(part.category_id);
             return (
               <div key={part.id}>
-                <div className="flex items-center gap-2 py-1.5 pr-3 pl-8 text-sm text-muted-foreground sm:hidden">
+                <div className="flex items-center gap-2 py-1.5 pr-3 pl-8 text-sm text-muted-foreground lg:hidden">
                   <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: partCat?.color }} />
                   <span className="min-w-0 flex-1 truncate">
                     {part.split_label || (partCat ? categoryDisplayName(partCat.name, locale, partCat.name_en) : "")}
@@ -551,7 +547,7 @@ export function UpcomingTable({
                   <span className="tabular shrink-0">{money(part.amount_cents, locale)}</span>
                 </div>
 
-                <div className={`${GRID} hidden items-center gap-1 px-2 py-1.5 text-sm sm:grid`}>
+                <div className={`${GRID} hidden items-center gap-1 px-2 py-1.5 text-sm lg:grid`}>
                   <span />
                   <span className="truncate pl-4 text-muted-foreground">{part.split_label || "—"}</span>
                   <span className="flex min-w-0 items-center gap-1.5 truncate">
@@ -576,7 +572,7 @@ export function UpcomingTable({
 
   return (
     <>
-      <div className="mb-3 flex items-center gap-2 text-base">
+      <div className="mb-3 flex flex-wrap items-center gap-2 text-base">
         <span className="text-muted-foreground">{t.sortBy}</span>
         <div className="flex gap-1 rounded-full border border-border bg-card p-1">
           {(
@@ -603,15 +599,16 @@ export function UpcomingTable({
       </div>
 
       <div className="overflow-x-auto rounded-[14px] border border-border bg-card">
-        {/* Szerokosc minimalna dopiero od sm — na telefonie tabela nie przewija sie w poziomie. */}
-        <div className="sm:min-w-235">
+        {/* Szerokosc minimalna dopiero od lg, gdzie tabela ma sie gdzie zmiescic. Nizej
+            wchodzi uklad dwuwierszowy, wiec przewijanie w poziomie nigdy nie jest potrzebne. */}
+        <div className="lg:min-w-[812px]">
           {rows.length === 0 && drafts.length === 0 && (
             <div className="px-4 py-10 text-center text-base text-muted-foreground">{t.noUpcoming}</div>
           )}
 
           {(rows.length > 0 || drafts.length > 0) && (
             <div
-              className={`${GRID} hidden items-center gap-1 border-b border-border bg-muted/50 px-2 py-2 text-xs font-medium tracking-wide text-muted-foreground uppercase sm:grid`}
+              className={`${GRID} hidden items-center gap-1 border-b border-border bg-muted/50 px-2 py-2 text-xs font-medium tracking-wide text-muted-foreground uppercase lg:grid`}
             >
               <span />
               <span>{t.title}</span>
@@ -656,7 +653,7 @@ export function UpcomingTable({
             return (
               <div
                 key={r.key}
-                className={`${GRID} hidden items-center gap-1 border-t border-border bg-muted/40 px-2 py-1.5 text-base sm:grid`}
+                className={`${GRID} hidden items-center gap-1 border-t border-border bg-muted/40 px-2 py-1.5 text-base lg:grid`}
               >
                 <button
                   type="button"
@@ -767,7 +764,7 @@ export function UpcomingTable({
         </div>
       </div>
 
-      <div className="mt-2 hidden flex-wrap items-center gap-3 sm:flex">
+      <div className="mt-2 hidden flex-wrap items-center gap-3 lg:flex">
         <button
           type="button"
           onClick={addRow}
