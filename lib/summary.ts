@@ -20,14 +20,21 @@ export type SummaryBudget = {
 };
 
 export type Summary = {
+  /** Wszystkie przychody miesiaca, oplacone czy nie. */
   income: number;
-  expenses: number;
-  balance: number;
+  /** Plan wydatkow: per kategoria wieksza z dwoch wartosci — budzet albo realne pozycje. */
+  plannedExpenses: number;
+  /** Realne pozycje wydatkowe, bez rezerwacji budzetowych. */
+  actualExpenses: number;
   paidIn: number;
   paidOut: number;
-  actual: number;
   opening: number;
-  closing: number;
+  /** Ile faktycznie jest na koncie: stan poczatkowy + to, co juz wplynelo i wyszlo. */
+  accountBalance: number;
+  /** Balans planu miesiaca — z rezerwacjami budzetowymi. */
+  balanceWithBudgets: number;
+  /** Balans na teraz: przychody minus wszystkie pozycje wydatkowe, bez roznicy budzetowej. */
+  balanceNow: number;
 };
 
 export function categorySpent(transactions: SummaryTransaction[], categoryId: string): number {
@@ -57,12 +64,14 @@ export function computeSummary(
     ...transactions.filter((t) => t.kind === "expense").map((t) => t.category_id),
     ...budgets.map((b) => b.category_id),
   ]);
-  const expenses = [...expenseCategoryIds].reduce(
+  const plannedExpenses = [...expenseCategoryIds].reduce(
     (sum, categoryId) => sum + categoryContribution(transactions, budgets, categoryId),
     0
   );
 
-  const balance = income - expenses;
+  const actualExpenses = transactions
+    .filter((t) => t.kind === "expense")
+    .reduce((s, t) => s + t.amount_cents, 0);
 
   const paidIn = transactions
     .filter((t) => t.kind === "income" && t.is_paid)
@@ -70,16 +79,16 @@ export function computeSummary(
   const paidOut = transactions
     .filter((t) => t.kind === "expense" && t.is_paid)
     .reduce((s, t) => s + t.amount_cents, 0);
-  const actual = paidIn - paidOut;
 
   return {
     income,
-    expenses,
-    balance,
+    plannedExpenses,
+    actualExpenses,
     paidIn,
     paidOut,
-    actual,
     opening: openingCents,
-    closing: openingCents + actual,
+    accountBalance: openingCents + paidIn - paidOut,
+    balanceWithBudgets: income - plannedExpenses,
+    balanceNow: income - actualExpenses,
   };
 }

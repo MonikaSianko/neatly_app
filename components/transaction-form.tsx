@@ -12,6 +12,7 @@ import {
   type RecurrencePattern,
 } from "@/lib/actions/recurring";
 import { ScopeDialog, type Scope } from "@/components/scope-dialog";
+import { CategoryCombobox } from "@/components/category-combobox";
 import { parseAmountToCents } from "@/lib/format";
 import { useLocale } from "@/components/locale-provider";
 import { WEEKDAYS, categoryDisplayName } from "@/lib/i18n";
@@ -310,7 +311,7 @@ function TransactionFormFields({
             value={amount}
             onChange={(e) => setAmount(e.target.value)}
             placeholder="0,00"
-            className="tabular w-40 rounded-[10px] border border-border bg-muted px-3 py-2 text-center text-[30px] font-semibold"
+            className="tabular w-40 rounded-[10px] border border-border bg-muted px-3 py-2 text-center text-[34px] font-semibold"
           />
           <button
             type="button"
@@ -324,46 +325,43 @@ function TransactionFormFields({
         </div>
 
         <div>
-          <label className="mb-1.5 block text-sm font-medium">{t.title}</label>
+          <label className="mb-1.5 block text-base font-medium">{t.title}</label>
           <input
             value={title}
             onChange={(e) => setTitle(e.target.value)}
-            className="w-full rounded-[10px] border border-border bg-muted px-3 py-2 text-sm"
+            className="w-full rounded-[10px] border border-border bg-muted px-3 py-2 text-base"
           />
         </div>
 
         <div>
-          <label className="mb-1.5 block text-sm font-medium">{t.category}</label>
-          <select
+          <label className="mb-1.5 block text-base font-medium">{t.category}</label>
+          <CategoryCombobox
+            options={filteredCategories.map((c) => ({
+              id: c.id,
+              label: categoryDisplayName(c.name, locale, c.name_en),
+              emoji: c.emoji,
+            }))}
             value={categoryId}
-            onChange={(e) => setCategoryId(e.target.value)}
-            className="w-full rounded-[10px] border border-border bg-muted px-3 py-2 text-sm"
-          >
-            <option value="">{t.category}</option>
-            {filteredCategories.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.emoji} {categoryDisplayName(c.name, locale, c.name_en)}
-              </option>
-            ))}
-          </select>
+            onChange={setCategoryId}
+          />
         </div>
 
         <div>
-          <label className="mb-1.5 block text-sm font-medium">{t.date}</label>
+          <label className="mb-1.5 block text-base font-medium">{t.date}</label>
           <input
             type="date"
             value={date}
             onChange={(e) => setDate(e.target.value)}
-            className="w-full rounded-[10px] border border-border bg-muted px-3 py-2 text-sm"
+            className="w-full rounded-[10px] border border-border bg-muted px-3 py-2 text-base"
           />
         </div>
 
         <div>
-          <label className="mb-1.5 block text-sm font-medium">{t.repeat}</label>
+          <label className="mb-1.5 block text-base font-medium">{t.repeat}</label>
           <select
             value={repeat}
             onChange={(e) => setRepeat(e.target.value as RepeatPreset)}
-            className="w-full rounded-[10px] border border-border bg-muted px-3 py-2 text-sm"
+            className="w-full rounded-[10px] border border-border bg-muted px-3 py-2 text-base"
           >
             <option value="never">{t.never}</option>
             <option value="day">{t.daily}</option>
@@ -386,7 +384,7 @@ function TransactionFormFields({
                   key={d}
                   type="button"
                   onClick={() => toggleWeekday(d)}
-                  className="rounded-full px-3 py-1.5 text-xs font-medium"
+                  className="rounded-full px-3 py-1.5 text-sm font-medium"
                   style={active ? { background: "var(--primary)", color: "var(--primary-foreground)" } : { border: "1px solid var(--border)", color: "var(--muted-foreground)" }}
                 >
                   {label}
@@ -404,13 +402,13 @@ function TransactionFormFields({
                 min={1}
                 value={customInterval}
                 onChange={(e) => setCustomInterval(e.target.value)}
-                className="w-16 rounded-[10px] border border-border bg-muted px-3 py-2 text-sm"
+                className="w-16 rounded-[10px] border border-border bg-muted px-3 py-2 text-base"
               />
             </div>
             <select
               value={customFreq}
               onChange={(e) => setCustomFreq(e.target.value as typeof customFreq)}
-              className="flex-1 rounded-[10px] border border-border bg-muted px-3 py-2 text-sm"
+              className="flex-1 rounded-[10px] border border-border bg-muted px-3 py-2 text-base"
             >
               <option value="day">{t.daily}</option>
               <option value="week">{t.weekly}</option>
@@ -430,7 +428,7 @@ function TransactionFormFields({
                   key={d}
                   type="button"
                   onClick={() => toggleWeekday(d)}
-                  className="rounded-full px-3 py-1.5 text-xs font-medium"
+                  className="rounded-full px-3 py-1.5 text-sm font-medium"
                   style={active ? { background: "var(--primary)", color: "var(--primary-foreground)" } : { border: "1px solid var(--border)", color: "var(--muted-foreground)" }}
                 >
                   {label}
@@ -442,12 +440,12 @@ function TransactionFormFields({
 
         {repeat !== "never" && (
           <div>
-            <label className="mb-1.5 block text-sm font-medium">{t.until}</label>
+            <label className="mb-1.5 block text-base font-medium">{t.until}</label>
             <div className="flex gap-2">
               <select
                 value={untilMode}
                 onChange={(e) => setUntilMode(e.target.value as "never" | "date")}
-                className="rounded-[10px] border border-border bg-muted px-3 py-2 text-sm"
+                className="rounded-[10px] border border-border bg-muted px-3 py-2 text-base"
               >
                 <option value="never">{t.noEnd}</option>
                 <option value="date">{t.untilDay}</option>
@@ -457,7 +455,7 @@ function TransactionFormFields({
                   type="date"
                   value={untilDate}
                   onChange={(e) => setUntilDate(e.target.value)}
-                  className="flex-1 rounded-[10px] border border-border bg-muted px-3 py-2 text-sm"
+                  className="flex-1 rounded-[10px] border border-border bg-muted px-3 py-2 text-base"
                 />
               )}
             </div>
@@ -465,41 +463,41 @@ function TransactionFormFields({
         )}
 
         <div>
-          <label className="mb-1.5 block text-sm font-medium">{t.noteOptional}</label>
+          <label className="mb-1.5 block text-base font-medium">{t.noteOptional}</label>
           <textarea
             value={note}
             onChange={(e) => setNote(e.target.value)}
             rows={2}
-            className="w-full resize-y rounded-[10px] border border-border bg-muted px-3 py-2 text-sm"
+            className="w-full resize-y rounded-[10px] border border-border bg-muted px-3 py-2 text-base"
           />
         </div>
 
         <div>
-          <label className="mb-1.5 block text-sm font-medium">{t.paymentUrlOptional}</label>
+          <label className="mb-1.5 block text-base font-medium">{t.paymentUrlOptional}</label>
           <input
             type="url"
             value={paymentUrl}
             onChange={(e) => setPaymentUrl(e.target.value)}
             placeholder="https://…"
-            className="w-full rounded-[10px] border border-border bg-muted px-3 py-2 text-sm"
+            className="w-full rounded-[10px] border border-border bg-muted px-3 py-2 text-base"
           />
         </div>
 
         {paymentUrl.trim() && (
           <div>
-            <label className="mb-1.5 block text-sm font-medium">{t.graceDays}</label>
+            <label className="mb-1.5 block text-base font-medium">{t.graceDays}</label>
             <input
               type="number"
               min={0}
               value={graceDays}
               onChange={(e) => setGraceDays(e.target.value)}
-              className="w-24 rounded-[10px] border border-border bg-muted px-3 py-2 text-sm"
+              className="w-24 rounded-[10px] border border-border bg-muted px-3 py-2 text-base"
             />
-            <p className="mt-1 text-xs text-muted-foreground">{t.graceDaysHint}</p>
+            <p className="mt-1 text-sm text-muted-foreground">{t.graceDaysHint}</p>
           </div>
         )}
 
-        <label className="flex min-h-11 items-center gap-2 text-sm sm:min-h-0">
+        <label className="flex min-h-11 items-center gap-2 text-base sm:min-h-0">
           <input
             type="checkbox"
             checked={isPaid}
@@ -510,7 +508,7 @@ function TransactionFormFields({
         </label>
 
         <div>
-          <label className="flex min-h-11 items-center gap-2 text-sm sm:min-h-0">
+          <label className="flex min-h-11 items-center gap-2 text-base sm:min-h-0">
             <input
               type="checkbox"
               checked={isAutomatic}
@@ -520,15 +518,15 @@ function TransactionFormFields({
             <Zap className="h-4 w-4 text-muted-foreground" />
             {t.automatic}
           </label>
-          <p className="mt-1 text-xs text-muted-foreground">{t.automaticHint}</p>
+          <p className="mt-1 text-sm text-muted-foreground">{t.automaticHint}</p>
         </div>
 
-        {error && <p className="text-xs" style={{ color: "var(--destructive)" }}>{error}</p>}
+        {error && <p className="text-sm" style={{ color: "var(--destructive)" }}>{error}</p>}
 
         <button
           type="submit"
           disabled={pending}
-          className="rounded-[10px] px-4 py-2.5 text-sm font-medium text-primary-foreground disabled:opacity-50"
+          className="rounded-[10px] px-4 py-2.5 text-base font-medium text-primary-foreground disabled:opacity-50"
           style={{ background: "var(--primary)" }}
         >
           {t.save}

@@ -113,7 +113,7 @@ export function TransactionGroupList({
 
   if (groups.length === 0) {
     return (
-      <div className="rounded-[14px] border border-border bg-card p-6 text-center text-sm text-muted-foreground">
+      <div className="rounded-[14px] border border-border bg-card p-6 text-center text-base text-muted-foreground">
         {t.emptyList}
       </div>
     );
@@ -133,11 +133,11 @@ export function TransactionGroupList({
                 className="flex w-full items-center gap-2 px-4 py-3 text-left"
               >
                 <span aria-hidden>{group.category?.emoji}</span>
-                <span className="flex-1 truncate text-sm font-medium">
+                <span className="flex-1 truncate text-base font-medium">
                   {group.category ? categoryDisplayName(group.category.name, locale, group.category.name_en) : "—"}
                 </span>
-                <span className="text-xs text-muted-foreground">{group.items.length} {t.rows}</span>
-                <span className="tabular text-sm font-medium">{money(group.sum, locale)}</span>
+                <span className="text-sm text-muted-foreground">{group.items.length} {t.rows}</span>
+                <span className="tabular text-base font-medium">{money(group.sum, locale)}</span>
                 <ChevronDown
                   className="h-4 w-4 text-muted-foreground transition-transform"
                   style={{ transform: isOpen ? "rotate(180deg)" : undefined }}
@@ -162,7 +162,7 @@ export function TransactionGroupList({
                             aria-label={kind === "income" ? t.received : t.paid}
                           />
                         </label>
-                        <span className="flex min-w-0 flex-1 items-center gap-1.5 text-sm">
+                        <span className="flex min-w-0 flex-1 items-center gap-1.5 text-base">
                           <span className="truncate">{row.title}</span>
                           {row.recurring_rule_id && (
                             <Repeat className="h-3 w-3 shrink-0 text-muted-foreground" aria-label={t.repeat} />
@@ -176,7 +176,7 @@ export function TransactionGroupList({
                           )}
                           {row.note && <NotePopover note={row.note} />}
                         </span>
-                        <span className="text-xs" style={{ color: overdue ? "var(--destructive)" : "var(--muted-foreground)" }}>
+                        <span className="text-sm" style={{ color: overdue ? "var(--destructive)" : "var(--muted-foreground)" }}>
                           {shortDate(row.date, locale)}
                           {overdue && ` ${t.overdue}`}
                         </span>
@@ -185,13 +185,13 @@ export function TransactionGroupList({
                             href={row.payment_url}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="flex shrink-0 items-center gap-1 rounded-full px-2.5 py-2 text-xs font-medium sm:py-1"
+                            className="flex shrink-0 items-center gap-1 rounded-full px-2.5 py-2 text-sm font-medium sm:py-1"
                             style={payNowStyle(paymentStatus(row.date, row.grace_days, today))}
                           >
                             <ExternalLink className="h-3 w-3" /> {t.payNow}
                           </a>
                         )}
-                        <span className="tabular text-sm font-medium">{money(row.amount_cents, locale)}</span>
+                        <span className="tabular text-base font-medium">{money(row.amount_cents, locale)}</span>
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
                             <button

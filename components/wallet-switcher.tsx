@@ -78,7 +78,7 @@ export function WalletSwitcher({
         <DropdownMenuTrigger asChild>
           <button
             type="button"
-            className="flex min-h-9 shrink-0 items-center gap-1 rounded-[10px] border border-border bg-card px-2.5 text-sm font-medium transition-opacity sm:min-h-8 sm:px-3"
+            className="flex min-h-9 shrink-0 items-center gap-1 rounded-[10px] border border-border bg-card px-2.5 text-base font-medium transition-opacity sm:min-h-8 sm:px-3"
             style={{ opacity: navPending ? 0.6 : 1 }}
           >
             <span aria-hidden>{active?.emoji}</span>
@@ -109,24 +109,24 @@ export function WalletSwitcher({
           </SheetHeader>
           <form onSubmit={submitCreate} className="flex flex-col gap-4 px-4 pb-4">
             <div>
-              <label className="mb-1.5 block text-sm font-medium">{t.walletName}</label>
+              <label className="mb-1.5 block text-base font-medium">{t.walletName}</label>
               <input
                 autoFocus
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 placeholder="np. Wakacje 2027"
-                className="w-full rounded-[10px] border border-border bg-muted px-3 py-2 text-sm"
+                className="w-full rounded-[10px] border border-border bg-muted px-3 py-2 text-base"
               />
             </div>
             <div>
-              <label className="mb-1.5 block text-sm font-medium">{t.icon}</label>
+              <label className="mb-1.5 block text-base font-medium">{t.icon}</label>
               <EmojiPicker value={emoji} onChange={setEmoji} />
             </div>
-            {error && <p className="text-xs" style={{ color: "var(--destructive)" }}>{error}</p>}
+            {error && <p className="text-sm" style={{ color: "var(--destructive)" }}>{error}</p>}
             <button
               type="submit"
               disabled={pending}
-              className="rounded-[10px] px-4 py-2.5 text-sm font-medium text-primary-foreground disabled:opacity-50"
+              className="rounded-[10px] px-4 py-2.5 text-base font-medium text-primary-foreground disabled:opacity-50"
               style={{ background: "var(--primary)" }}
             >
               {t.createWallet}

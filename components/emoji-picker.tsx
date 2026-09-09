@@ -16,7 +16,7 @@ export function EmojiPicker({ value, onChange }: { value: string; onChange: (emo
       <button
         type="button"
         onClick={() => setOpen(!open)}
-        className="flex h-10 w-12 items-center justify-center rounded-[10px] border border-border bg-muted text-xl"
+        className="flex h-10 w-12 items-center justify-center rounded-[10px] border border-border bg-muted text-2xl"
       >
         {value || "🙂"}
       </button>
@@ -30,7 +30,7 @@ export function EmojiPicker({ value, onChange }: { value: string; onChange: (emo
                 onChange(e);
                 setOpen(false);
               }}
-              className="rounded py-1 text-lg hover:bg-muted"
+              className="rounded py-1 text-xl hover:bg-muted"
             >
               {e}
             </button>

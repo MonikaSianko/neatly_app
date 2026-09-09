@@ -7,8 +7,8 @@ export default function LoginPage() {
       <div className="flex flex-col items-center gap-3">
         <img src="/neatly-icon.svg" alt="Neatly" className="h-14 w-14 rounded-[14px]" />
         <div className="text-center">
-          <h1 className="text-lg font-semibold">Neatly</h1>
-          <p className="text-sm text-muted-foreground">Budżet rodzinny</p>
+          <h1 className="text-xl font-semibold">Neatly</h1>
+          <p className="text-base text-muted-foreground">Budżet rodzinny</p>
         </div>
       </div>
       <Suspense>

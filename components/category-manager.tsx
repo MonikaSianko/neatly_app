@@ -121,7 +121,7 @@ export function CategoryManager({
                   setKind(k);
                   setEdit(null);
                 }}
-                className="rounded-full px-3 py-1.5 text-sm font-medium"
+                className="rounded-full px-3 py-1.5 text-base font-medium"
                 style={
                   kind === k
                     ? { background: "var(--neatly-primary-soft)", color: "var(--neatly-primary-dark)" }
@@ -141,7 +141,7 @@ export function CategoryManager({
               >
                 <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: c.color }} />
                 <span aria-hidden>{c.emoji}</span>
-                <span className="flex-1 truncate text-sm">{categoryDisplayName(c.name, locale, c.name_en)}</span>
+                <span className="flex-1 truncate text-base">{categoryDisplayName(c.name, locale, c.name_en)}</span>
                 <button
                   type="button"
                   onClick={() => move(c.id, -1)}
@@ -188,7 +188,7 @@ export function CategoryManager({
           <button
             type="button"
             onClick={() => setEdit({ id: null, name: "", emoji: "📦", color: PALETTE[0] })}
-            className="flex w-full items-center justify-center gap-1.5 rounded-[10px] border border-border py-2 text-sm font-medium hover:bg-muted"
+            className="flex w-full items-center justify-center gap-1.5 rounded-[10px] border border-border py-2 text-base font-medium hover:bg-muted"
           >
             <Plus className="h-4 w-4" /> {t.newCategory}
           </button>
@@ -198,7 +198,7 @@ export function CategoryManager({
               <button
                 type="button"
                 onClick={() => setShowArchived(!showArchived)}
-                className="flex items-center gap-1.5 text-sm text-muted-foreground"
+                className="flex items-center gap-1.5 text-base text-muted-foreground"
               >
                 <Archive className="h-3.5 w-3.5" /> {t.archived} ({archived.length})
               </button>
@@ -210,14 +210,14 @@ export function CategoryManager({
                       className={`flex items-center gap-2 bg-muted px-3 py-2 ${i > 0 ? "border-t border-border" : ""}`}
                     >
                       <span aria-hidden>{c.emoji}</span>
-                      <span className="flex-1 truncate text-sm text-muted-foreground">
+                      <span className="flex-1 truncate text-base text-muted-foreground">
                         {categoryDisplayName(c.name, locale, c.name_en)}
                       </span>
                       <button
                         type="button"
                         onClick={() => restore(c.id)}
                         disabled={pending}
-                        className="flex items-center gap-1 p-1 text-xs"
+                        className="flex items-center gap-1 p-1 text-sm"
                         style={{ color: "var(--neatly-primary-dark)" }}
                       >
                         <RotateCcw className="h-3.5 w-3.5" /> {t.restore}
@@ -229,14 +229,14 @@ export function CategoryManager({
             </div>
           )}
 
-          {error && <p className="text-xs" style={{ color: "var(--destructive)" }}>{error}</p>}
+          {error && <p className="text-sm" style={{ color: "var(--destructive)" }}>{error}</p>}
 
           {edit && (
             <form onSubmit={submitEdit} className="flex flex-col gap-4 border-t border-border pt-4">
               <div>
-                <label className="mb-1.5 flex items-center gap-2 text-sm font-medium">
+                <label className="mb-1.5 flex items-center gap-2 text-base font-medium">
                   {t.walletName}
-                  <span className="rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-semibold tracking-wide text-muted-foreground uppercase">
+                  <span className="rounded-full bg-muted px-1.5 py-0.5 text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">
                     {locale}
                   </span>
                 </label>
@@ -244,16 +244,16 @@ export function CategoryManager({
                   autoFocus
                   value={edit.name}
                   onChange={(e) => setEdit({ ...edit, name: e.target.value })}
-                  className="w-full rounded-[10px] border border-border bg-muted px-3 py-2 text-sm"
+                  className="w-full rounded-[10px] border border-border bg-muted px-3 py-2 text-base"
                 />
-                <p className="mt-1 text-xs text-muted-foreground">{t.categoryNameHint}</p>
+                <p className="mt-1 text-sm text-muted-foreground">{t.categoryNameHint}</p>
               </div>
               <div>
-                <label className="mb-1.5 block text-sm font-medium">{t.icon}</label>
+                <label className="mb-1.5 block text-base font-medium">{t.icon}</label>
                 <EmojiPicker value={edit.emoji} onChange={(emoji) => setEdit({ ...edit, emoji })} />
               </div>
               <div>
-                <label className="mb-1.5 block text-sm font-medium">{t.color}</label>
+                <label className="mb-1.5 block text-base font-medium">{t.color}</label>
                 <div className="flex flex-wrap gap-1.5">
                   {PALETTE.map((p) => (
                     <button
@@ -274,7 +274,7 @@ export function CategoryManager({
                 <button
                   type="submit"
                   disabled={pending}
-                  className="flex-1 rounded-[10px] px-4 py-2 text-sm font-medium text-primary-foreground disabled:opacity-50"
+                  className="flex-1 rounded-[10px] px-4 py-2 text-base font-medium text-primary-foreground disabled:opacity-50"
                   style={{ background: "var(--primary)" }}
                 >
                   {t.saveCategory}
@@ -282,7 +282,7 @@ export function CategoryManager({
                 <button
                   type="button"
                   onClick={() => setEdit(null)}
-                  className="rounded-[10px] border border-border px-4 py-2 text-sm font-medium hover:bg-muted"
+                  className="rounded-[10px] border border-border px-4 py-2 text-base font-medium hover:bg-muted"
                 >
                   {t.cancel}
                 </button>

@@ -52,7 +52,7 @@ export function OpeningBalance({
           setAmount((openingCents / 100).toFixed(2).replace(".", ","));
           setOpen(true);
         }}
-        className="flex items-center gap-1 text-sm text-muted-foreground"
+        className="flex items-center gap-1 text-base text-muted-foreground"
       >
         {t.opening}
         <span className="tabular font-medium text-foreground">{money(openingCents, locale)}</span>
@@ -66,22 +66,22 @@ export function OpeningBalance({
           </SheetHeader>
           <div className="flex flex-col gap-4 px-4 pb-4">
             <div>
-              <label className="mb-1.5 block text-sm font-medium">{t.amount}</label>
+              <label className="mb-1.5 block text-base font-medium">{t.amount}</label>
               <input
                 autoFocus
                 inputMode="decimal"
                 value={amount}
                 onChange={(e) => setAmount(e.target.value)}
                 placeholder="0,00"
-                className="w-full rounded-[10px] border border-border bg-muted px-3 py-2 text-sm"
+                className="w-full rounded-[10px] border border-border bg-muted px-3 py-2 text-base"
               />
             </div>
-            <p className="text-xs text-muted-foreground">{t.openingHint}</p>
+            <p className="text-sm text-muted-foreground">{t.openingHint}</p>
             <button
               type="button"
               onClick={carryOver}
               disabled={pending}
-              className="flex w-fit items-center gap-1.5 text-sm disabled:opacity-50"
+              className="flex w-fit items-center gap-1.5 text-base disabled:opacity-50"
               style={{ color: "var(--neatly-primary-dark)" }}
             >
               <CornerDownRight className="h-3.5 w-3.5" /> {t.carryPrev}
@@ -91,7 +91,7 @@ export function OpeningBalance({
                 type="button"
                 onClick={save}
                 disabled={pending}
-                className="flex-1 rounded-[10px] px-4 py-2.5 text-sm font-medium text-primary-foreground disabled:opacity-50"
+                className="flex-1 rounded-[10px] px-4 py-2.5 text-base font-medium text-primary-foreground disabled:opacity-50"
                 style={{ background: "var(--primary)" }}
               >
                 {t.save}
@@ -99,7 +99,7 @@ export function OpeningBalance({
               <button
                 type="button"
                 onClick={() => setOpen(false)}
-                className="rounded-[10px] border border-border px-4 py-2.5 text-sm font-medium hover:bg-muted"
+                className="rounded-[10px] border border-border px-4 py-2.5 text-base font-medium hover:bg-muted"
               >
                 {t.cancel}
               </button>

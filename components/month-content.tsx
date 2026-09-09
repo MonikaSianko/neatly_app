@@ -58,7 +58,7 @@ export async function MonthContent({
     supabase
       .from("transactions")
       .select(
-        "id, kind, title, amount_cents, category_id, date, is_paid, recurring_rule_id, payment_url, grace_days, note, is_automatic"
+        "id, kind, title, amount_cents, category_id, date, is_paid, created_at, recurring_rule_id, payment_url, grace_days, note, is_automatic"
       )
       .eq("household_id", householdId)
       .eq("wallet_id", walletId)
@@ -137,37 +137,45 @@ export async function MonthContent({
 
   const defaultDate = ym.y === Number(today.slice(0, 4)) && ym.m === Number(today.slice(5, 7)) ? today : range.from;
   const expenseCategories = categories.filter((c) => c.kind === "expense" && !c.is_archived);
-  const upcomingRows = monthTx
-    .filter((t) => !t.is_paid)
-    .sort((a, b) => a.date.localeCompare(b.date) || a.title.localeCompare(b.title));
+  // Zakladka Platnosci pokazuje caly miesiac; podzial na oplacone/nieoplacone i sortowanie robi klient.
+  const paymentRows = monthTx;
 
   return (
     <>
       {/* Prawa kolumna na mobile jest u góry */}
       <aside className="order-1 flex flex-col gap-4 md:order-2">
         <section className="rounded-[14px] border border-border bg-card p-4">
-          <div className="flex items-center justify-between text-sm">
+          <div className="flex items-center justify-between text-base">
             <OpeningBalance householdId={householdId} walletId={walletId} ym={ym} openingCents={openingCents} />
           </div>
           <div className="mt-3 grid grid-cols-2 gap-3">
             <div>
-              <div className="text-[11px] text-muted-foreground">{dict.income}</div>
-              <div className="tabular text-[18px] font-semibold">{money(summary.income, locale)}</div>
+              <div className="text-xs text-muted-foreground">{dict.income}</div>
+              <div className="tabular text-xl font-semibold">{money(summary.income, locale)}</div>
             </div>
             <div>
-              <div className="text-[11px] text-muted-foreground">{dict.expenses}</div>
-              <div className="tabular text-[18px] font-semibold">{money(summary.expenses, locale)}</div>
+              <div className="text-xs text-muted-foreground">{dict.plannedExpenses}</div>
+              <div className="tabular text-xl font-semibold">{money(summary.plannedExpenses, locale)}</div>
             </div>
             <div>
-              <div className="text-[11px] text-muted-foreground">{dict.balance}</div>
-              <div className="tabular text-[18px] font-semibold" style={{ color: "var(--neatly-primary-dark)" }}>
-                {money(summary.balance, locale)}
+              <div className="text-xs text-muted-foreground">{dict.accountBalance}</div>
+              <div className="tabular text-xl font-semibold">{money(summary.accountBalance, locale)}</div>
+            </div>
+            <div>
+              <div className="text-xs text-muted-foreground">{dict.balanceWithBudgets}</div>
+              <div className="tabular text-xl font-semibold" style={{ color: "var(--neatly-primary-dark)" }}>
+                {money(summary.balanceWithBudgets, locale)}
               </div>
             </div>
-            <div>
-              <div className="text-[11px] text-muted-foreground">{dict.accountBalance}</div>
-              <div className="tabular text-[18px] font-semibold">{money(summary.closing, locale)}</div>
-            </div>
+          </div>
+          <div className="mt-3 flex items-center justify-between border-t border-border pt-3">
+            <span className="text-xs text-muted-foreground">{dict.balanceNow}</span>
+            <span
+              className="tabular text-xl font-semibold"
+              style={{ color: summary.balanceNow < 0 ? "var(--destructive)" : "var(--neatly-success)" }}
+            >
+              {money(summary.balanceNow, locale)}
+            </span>
           </div>
         </section>
 
@@ -188,10 +196,11 @@ export async function MonthContent({
           panels={{
             upcoming: (
               <UpcomingTable
-                rows={upcomingRows}
+                rows={paymentRows}
                 categories={categories}
                 householdId={householdId}
                 walletId={walletId}
+                rules={rulesMap}
                 today={today}
                 defaultDate={defaultDate}
               />

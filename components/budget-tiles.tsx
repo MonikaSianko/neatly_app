@@ -12,6 +12,7 @@ import { money } from "@/lib/format";
 import type { YearMonth } from "@/lib/month";
 import { useLocale } from "@/components/locale-provider";
 import { categoryDisplayName } from "@/lib/i18n";
+import { CategoryCombobox } from "@/components/category-combobox";
 
 type Category = { id: string; name: string; name_en: string | null; emoji: string; color: string };
 export type BudgetRow = { id: string; categoryId: string; limitCents: number; spentCents: number };
@@ -75,11 +76,11 @@ export function BudgetTiles({
   return (
     <section className="rounded-[14px] border border-border bg-card p-4">
       <div className="mb-3 flex items-center justify-between">
-        <h2 className="text-sm font-medium">{t.budgets}</h2>
+        <h2 className="text-base font-medium">{t.budgets}</h2>
         <button
           type="button"
           onClick={() => setEdit({ id: null, categoryId: "", amount: "" })}
-          className="rounded-[10px] border border-border px-2.5 py-1 text-xs font-medium hover:bg-muted"
+          className="rounded-[10px] border border-border px-2.5 py-1 text-sm font-medium hover:bg-muted"
         >
           {t.setBudget}
         </button>
@@ -87,12 +88,12 @@ export function BudgetTiles({
 
       {rows.length === 0 ? (
         <div className="flex flex-col gap-3">
-          <p className="text-xs text-muted-foreground">{t.budgetsEmpty}</p>
+          <p className="text-sm text-muted-foreground">{t.budgetsEmpty}</p>
           <button
             type="button"
             onClick={copyPrev}
             disabled={pending}
-            className="w-fit text-xs font-medium disabled:opacity-50"
+            className="w-fit text-sm font-medium disabled:opacity-50"
             style={{ color: "var(--neatly-primary-dark)" }}
           >
             {t.copyPrev}
@@ -117,12 +118,12 @@ export function BudgetTiles({
                 }
                 className="rounded-[10px] border border-border p-3 text-left"
               >
-                <div className="flex items-center justify-between text-sm">
+                <div className="flex items-center justify-between text-base">
                   <span className="flex items-center gap-1.5 font-medium">
                     <span aria-hidden>{cat?.emoji}</span>
                     {cat ? categoryDisplayName(cat.name, locale, cat.name_en) : ""}
                   </span>
-                  <span className="tabular text-xs text-muted-foreground">
+                  <span className="tabular text-sm text-muted-foreground">
                     {money(row.spentCents, locale)} / {money(row.limitCents, locale)}
                   </span>
                 </div>
@@ -132,7 +133,7 @@ export function BudgetTiles({
                     style={{ width: `${pct}%`, background: over ? "var(--destructive)" : cat?.color }}
                   />
                 </div>
-                <div className="mt-1 text-[11px]" style={{ color: over ? "var(--destructive)" : "var(--muted-foreground)" }}>
+                <div className="mt-1 text-xs" style={{ color: over ? "var(--destructive)" : "var(--muted-foreground)" }}>
                   {over
                     ? `${t.over} ${money(row.spentCents - row.limitCents, locale)}`
                     : `${t.left} ${money(row.limitCents - row.spentCents, locale)}`}
@@ -151,39 +152,36 @@ export function BudgetTiles({
           {edit && (
             <form onSubmit={submit} className="flex flex-col gap-4 px-4 pb-4">
               <div>
-                <label className="mb-1.5 block text-sm font-medium">{t.category}</label>
-                <select
+                <label className="mb-1.5 block text-base font-medium">{t.category}</label>
+                <CategoryCombobox
+                  options={available.map((c) => ({
+                    id: c.id,
+                    label: categoryDisplayName(c.name, locale, c.name_en),
+                    emoji: c.emoji,
+                  }))}
                   value={edit.categoryId}
                   disabled={!!edit.id}
-                  onChange={(e) => setEdit({ ...edit, categoryId: e.target.value })}
-                  className="w-full rounded-[10px] border border-border bg-muted px-3 py-2 text-sm disabled:opacity-60"
-                >
-                  <option value="">—</option>
-                  {available.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.emoji} {categoryDisplayName(c.name, locale, c.name_en)}
-                    </option>
-                  ))}
-                </select>
+                  onChange={(categoryId) => setEdit({ ...edit, categoryId })}
+                />
               </div>
               <div>
-                <label className="mb-1.5 block text-sm font-medium">{t.limitMonth}</label>
+                <label className="mb-1.5 block text-base font-medium">{t.limitMonth}</label>
                 <input
                   autoFocus
                   inputMode="decimal"
                   value={edit.amount}
                   onChange={(e) => setEdit({ ...edit, amount: e.target.value })}
                   placeholder="2500,00"
-                  className="w-full rounded-[10px] border border-border bg-muted px-3 py-2 text-sm"
+                  className="w-full rounded-[10px] border border-border bg-muted px-3 py-2 text-base"
                 />
               </div>
-              <p className="text-xs text-muted-foreground">{t.budgetHint}</p>
-              {error && <p className="text-xs" style={{ color: "var(--destructive)" }}>{error}</p>}
+              <p className="text-sm text-muted-foreground">{t.budgetHint}</p>
+              {error && <p className="text-sm" style={{ color: "var(--destructive)" }}>{error}</p>}
               <div className="flex gap-2">
                 <button
                   type="submit"
                   disabled={pending || !edit.categoryId}
-                  className="flex-1 rounded-[10px] px-4 py-2.5 text-sm font-medium text-primary-foreground disabled:opacity-50"
+                  className="flex-1 rounded-[10px] px-4 py-2.5 text-base font-medium text-primary-foreground disabled:opacity-50"
                   style={{ background: "var(--primary)" }}
                 >
                   {t.save}
@@ -193,7 +191,7 @@ export function BudgetTiles({
                     type="button"
                     onClick={() => remove(edit.id!)}
                     disabled={pending}
-                    className="rounded-[10px] px-4 py-2.5 text-sm font-medium"
+                    className="rounded-[10px] px-4 py-2.5 text-base font-medium"
                     style={{ background: "var(--neatly-danger-soft)", color: "var(--destructive)" }}
                   >
                     {t.del}

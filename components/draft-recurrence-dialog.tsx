@@ -51,7 +51,7 @@ export function DraftRecurrenceDialog({
           <select
             value={preset}
             onChange={(e) => setPreset(e.target.value as RepeatPreset)}
-            className="w-full rounded-[10px] border border-border bg-muted px-3 py-2 text-sm"
+            className="w-full rounded-[10px] border border-border bg-muted px-3 py-2 text-base"
           >
             {repeatOptions(t).map((o) => (
               <option key={o.value} value={o.value}>
@@ -70,7 +70,7 @@ export function DraftRecurrenceDialog({
                     key={d}
                     type="button"
                     onClick={() => toggleWeekday(d)}
-                    className="rounded-full px-3 py-1.5 text-xs font-medium"
+                    className="rounded-full px-3 py-1.5 text-sm font-medium"
                     style={active ? { background: "var(--primary)", color: "var(--primary-foreground)" } : { border: "1px solid var(--border)", color: "var(--muted-foreground)" }}
                   >
                     {label}
@@ -87,12 +87,12 @@ export function DraftRecurrenceDialog({
                 min={1}
                 value={customInterval}
                 onChange={(e) => setCustomInterval(e.target.value)}
-                className="w-16 rounded-[10px] border border-border bg-muted px-3 py-2 text-sm"
+                className="w-16 rounded-[10px] border border-border bg-muted px-3 py-2 text-base"
               />
               <select
                 value={customFreq}
                 onChange={(e) => setCustomFreq(e.target.value as typeof customFreq)}
-                className="flex-1 rounded-[10px] border border-border bg-muted px-3 py-2 text-sm"
+                className="flex-1 rounded-[10px] border border-border bg-muted px-3 py-2 text-base"
               >
                 <option value="day">{t.daily}</option>
                 <option value="week">{t.weekly}</option>
@@ -107,7 +107,7 @@ export function DraftRecurrenceDialog({
               <select
                 value={untilMode}
                 onChange={(e) => setUntilMode(e.target.value as "never" | "date")}
-                className="rounded-[10px] border border-border bg-muted px-3 py-2 text-sm"
+                className="rounded-[10px] border border-border bg-muted px-3 py-2 text-base"
               >
                 <option value="never">{t.noEnd}</option>
                 <option value="date">{t.untilDay}</option>
@@ -117,7 +117,7 @@ export function DraftRecurrenceDialog({
                   type="date"
                   value={untilDate}
                   onChange={(e) => setUntilDate(e.target.value)}
-                  className="flex-1 rounded-[10px] border border-border bg-muted px-3 py-2 text-sm"
+                  className="flex-1 rounded-[10px] border border-border bg-muted px-3 py-2 text-base"
                 />
               )}
             </div>
@@ -127,7 +127,7 @@ export function DraftRecurrenceDialog({
             <button
               type="button"
               onClick={apply}
-              className="flex-1 rounded-[10px] px-4 py-2.5 text-sm font-medium text-primary-foreground"
+              className="flex-1 rounded-[10px] px-4 py-2.5 text-base font-medium text-primary-foreground"
               style={{ background: "var(--primary)" }}
             >
               {t.apply}
@@ -139,7 +139,7 @@ export function DraftRecurrenceDialog({
                   setPreset("never");
                   onApply(null);
                 }}
-                className="rounded-[10px] border border-border px-4 py-2.5 text-sm font-medium hover:bg-muted"
+                className="rounded-[10px] border border-border px-4 py-2.5 text-base font-medium hover:bg-muted"
               >
                 {t.clearRepeat}
               </button>

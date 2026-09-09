@@ -31,7 +31,7 @@ export function ScopeDialog({
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
         </DialogHeader>
-        <p className="px-4 text-sm text-muted-foreground">{t.scopeIntro}</p>
+        <p className="px-4 text-base text-muted-foreground">{t.scopeIntro}</p>
         <div className="flex flex-col gap-2 p-4 pt-2">
           {options.map((opt) => (
             <button
@@ -40,8 +40,8 @@ export function ScopeDialog({
               onClick={() => onPick(opt.value)}
               className="min-h-11 rounded-[10px] border border-border p-3 text-left hover:bg-muted"
             >
-              <div className="text-sm font-medium">{opt.label}</div>
-              <div className="text-xs text-muted-foreground">{opt.hint}</div>
+              <div className="text-base font-medium">{opt.label}</div>
+              <div className="text-sm text-muted-foreground">{opt.hint}</div>
             </button>
           ))}
         </div>

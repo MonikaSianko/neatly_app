@@ -68,7 +68,7 @@ export default async function Home({
       />
 
       <SwipeMonth ym={ym}>
-        <main className="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-4 p-4 md:grid md:grid-cols-[1fr_320px] md:items-start md:gap-6 md:p-6">
+        <main className="mx-auto flex w-full max-w-[1600px] flex-1 flex-col gap-4 px-2 py-4 md:grid md:grid-cols-[1fr_320px] md:items-start md:gap-5 md:px-4 md:py-5">
           {/* Klucz przelacza granice przy zmianie portfela/miesiaca, wiec szkielet pojawia sie od razu. */}
           <Suspense key={`${activeWalletId}-${monthKey(ym)}`} fallback={<MonthSkeleton />}>
             <MonthContent

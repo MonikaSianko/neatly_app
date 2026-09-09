@@ -68,7 +68,7 @@ export function UserMenu({
             <SheetContent side="bottom" className="max-h-[85vh] gap-0 rounded-t-2xl pb-[env(safe-area-inset-bottom)]">
               <SheetHeader className="pb-2">
                 <SheetTitle>{t.account}</SheetTitle>
-                {email && <p className="truncate text-sm text-muted-foreground">{email}</p>}
+                {email && <p className="truncate text-base text-muted-foreground">{email}</p>}
               </SheetHeader>
 
               <nav className="flex flex-col px-2 pb-3">
@@ -78,7 +78,7 @@ export function UserMenu({
                     setSheetOpen(false);
                     setCategoriesOpen(true);
                   }}
-                  className="flex min-h-12 items-center gap-3 rounded-[10px] px-3 text-left text-[15px] active:bg-muted"
+                  className="flex min-h-12 items-center gap-3 rounded-[10px] px-3 text-left text-[17px] active:bg-muted"
                 >
                   <Tags className="h-5 w-5 text-muted-foreground" />
                   {t.categories}
@@ -89,14 +89,14 @@ export function UserMenu({
                     setSheetOpen(false);
                     router.push("/household");
                   }}
-                  className="flex min-h-12 items-center gap-3 rounded-[10px] px-3 text-left text-[15px] active:bg-muted"
+                  className="flex min-h-12 items-center gap-3 rounded-[10px] px-3 text-left text-[17px] active:bg-muted"
                 >
                   <Home className="h-5 w-5 text-muted-foreground" />
                   {t.household}
                 </button>
 
                 <div className="mt-1 border-t border-border pt-2">
-                  <div className="flex items-center gap-3 px-3 py-2 text-xs font-medium text-muted-foreground">
+                  <div className="flex items-center gap-3 px-3 py-2 text-sm font-medium text-muted-foreground">
                     <Languages className="h-4 w-4" />
                     {t.language}
                   </div>
@@ -105,7 +105,7 @@ export function UserMenu({
                       key={l.value}
                       type="button"
                       onClick={() => setLocale(l.value)}
-                      className="flex min-h-12 w-full items-center gap-3 rounded-[10px] px-3 pl-11 text-left text-[15px] active:bg-muted"
+                      className="flex min-h-12 w-full items-center gap-3 rounded-[10px] px-3 pl-11 text-left text-[17px] active:bg-muted"
                     >
                       <span className="flex-1">{l.label}</span>
                       {locale === l.value && <Check className="h-4 w-4" style={{ color: "var(--primary)" }} />}
@@ -116,7 +116,7 @@ export function UserMenu({
                 <button
                   type="button"
                   onClick={logout}
-                  className="mt-1 flex min-h-12 items-center gap-3 rounded-[10px] border-t border-border px-3 text-left text-[15px] active:bg-muted"
+                  className="mt-1 flex min-h-12 items-center gap-3 rounded-[10px] border-t border-border px-3 text-left text-[17px] active:bg-muted"
                 >
                   <LogOut className="h-5 w-5 text-muted-foreground" />
                   {t.logout}
@@ -146,7 +146,7 @@ export function UserMenu({
               <DropdownMenuSubTrigger>
                 <Languages className="h-4 w-4" />
                 <span className="flex-1">{t.language}</span>
-                <span className="text-xs text-muted-foreground uppercase">{locale}</span>
+                <span className="text-sm text-muted-foreground uppercase">{locale}</span>
               </DropdownMenuSubTrigger>
               <DropdownMenuSubContent className="min-w-36">
                 <DropdownMenuRadioGroup value={locale} onValueChange={(v) => setLocale(v as Locale)}>

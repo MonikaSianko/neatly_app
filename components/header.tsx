@@ -24,10 +24,10 @@ export function Header({
 }) {
   return (
     <header className="sticky top-0 z-10 border-b border-border bg-background">
-      <div className="mx-auto flex h-14 max-w-5xl items-center gap-2 px-4 sm:gap-3">
+      <div className="mx-auto flex h-14 w-full max-w-[1600px] items-center gap-2 px-2 sm:gap-3 md:px-4">
         <Link href="/" className="flex shrink-0 items-center gap-2">
           <img src="/neatly-icon.svg" alt="Neatly" className="h-7 w-7 rounded-[8px]" />
-          <span className="hidden text-sm font-medium sm:inline">Neatly</span>
+          <span className="hidden text-base font-medium sm:inline">Neatly</span>
         </Link>
 
         <WalletSwitcher wallets={wallets} activeWalletId={activeWalletId} householdId={householdId} />

@@ -45,7 +45,7 @@ export function MonthTabs({
               aria-selected={active}
               aria-controls={`panel-${key}`}
               onClick={() => select(key)}
-              className="min-h-11 rounded-full px-4 text-sm font-medium sm:min-h-8 sm:px-3"
+              className="min-h-11 rounded-full px-4 text-base font-medium sm:min-h-8 sm:px-3"
               style={
                 active
                   ? { background: "var(--neatly-primary-soft)", color: "var(--neatly-primary-dark)" }

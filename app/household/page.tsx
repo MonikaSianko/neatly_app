@@ -64,31 +64,31 @@ export default async function HouseholdPage() {
         >
           <ArrowLeft className="h-5 w-5" />
         </Link>
-        <h1 className="text-lg font-semibold">{dict.household}</h1>
+        <h1 className="text-xl font-semibold">{dict.household}</h1>
       </div>
 
       <section className="flex flex-col gap-2">
-        <h2 className="text-sm font-medium text-muted-foreground">{dict.walletName}</h2>
+        <h2 className="text-base font-medium text-muted-foreground">{dict.walletName}</h2>
         <RenameForm householdId={household.id} initialName={household.name} />
       </section>
 
       <section className="flex flex-col gap-2">
-        <h2 className="text-sm font-medium text-muted-foreground">{dict.members}</h2>
+        <h2 className="text-base font-medium text-muted-foreground">{dict.members}</h2>
         <div className="rounded-[14px] border border-border bg-card">
           {(members ?? []).map((member, i) => {
             const p = memberProfiles?.find((mp) => mp.user_id === member.user_id);
             return (
               <div
                 key={member.user_id}
-                className={`flex items-center justify-between px-4 py-3 text-sm ${
+                className={`flex items-center justify-between px-4 py-3 text-base ${
                   i > 0 ? "border-t border-border" : ""
                 }`}
               >
                 <div>
                   <div className="font-medium">{p?.display_name || p?.email || "—"}</div>
-                  <div className="text-[11px] text-muted-foreground">{p?.email}</div>
+                  <div className="text-xs text-muted-foreground">{p?.email}</div>
                 </div>
-                <span className="text-xs text-muted-foreground">
+                <span className="text-sm text-muted-foreground">
                   {member.role === "owner" ? dict.owner : dict.member}
                 </span>
               </div>
@@ -98,7 +98,7 @@ export default async function HouseholdPage() {
       </section>
 
       <section className="flex flex-col gap-2">
-        <h2 className="text-sm font-medium text-muted-foreground">{dict.inviteCode}</h2>
+        <h2 className="text-base font-medium text-muted-foreground">{dict.inviteCode}</h2>
         <InvitePanel householdId={household.id} initialInvite={pendingInvite ?? null} />
       </section>
     </main>

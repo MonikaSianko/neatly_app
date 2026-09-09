@@ -41,7 +41,7 @@ export function MonthNav({ ym }: { ym: YearMonth }) {
           setPickerYear(ym.y);
           setOpen(!open);
         }}
-        className="min-h-9 min-w-28 rounded-[10px] px-2 text-center text-sm font-medium capitalize hover:bg-muted"
+        className="min-h-9 min-w-28 rounded-[10px] px-2 text-center text-base font-medium capitalize hover:bg-muted"
       >
         {monthLabel(ym, locale)}
       </button>
@@ -65,7 +65,7 @@ export function MonthNav({ ym }: { ym: YearMonth }) {
             >
               <ChevronLeft className="h-4 w-4" />
             </button>
-            <span className="text-sm font-medium">{pickerYear}</span>
+            <span className="text-base font-medium">{pickerYear}</span>
             <button
               type="button"
               onClick={() => setPickerYear((y) => y + 1)}
@@ -86,7 +86,7 @@ export function MonthNav({ ym }: { ym: YearMonth }) {
                     go({ y: pickerYear, m: i + 1 });
                     setOpen(false);
                   }}
-                  className="min-h-11 rounded-[10px] text-sm capitalize hover:bg-muted sm:min-h-9"
+                  className="min-h-11 rounded-[10px] text-base capitalize hover:bg-muted sm:min-h-9"
                   style={active ? { background: "var(--primary)", color: "var(--primary-foreground)" } : undefined}
                 >
                   {monthShort(i)}

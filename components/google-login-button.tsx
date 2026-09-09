@@ -21,7 +21,7 @@ export function GoogleLoginButton() {
     <button
       type="button"
       onClick={signInWithGoogle}
-      className="flex items-center justify-center gap-2 rounded-[10px] px-4 py-2.5 text-sm font-medium text-primary-foreground"
+      className="flex items-center justify-center gap-2 rounded-[10px] px-4 py-2.5 text-base font-medium text-primary-foreground"
       style={{ background: "var(--primary)" }}
     >
       <svg viewBox="0 0 24 24" className="h-4 w-4" aria-hidden>
