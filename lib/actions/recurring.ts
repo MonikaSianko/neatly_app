@@ -78,6 +78,75 @@ export async function createRecurringEntry(householdId: string, walletId: string
   return { error: null };
 }
 
+/**
+ * Jednorazowa pozycja staje sie cykliczna. Istniejacy wiersz zostaje pierwszym wystapieniem nowej reguly,
+ * zamiast zostac skasowany i wstawiony od nowa — edycja ma zmieniac pozycje, nie tworzyc nowej.
+ */
+export async function convertToRecurring(
+  transactionId: string,
+  householdId: string,
+  walletId: string,
+  input: RecurringEntryInput
+) {
+  const trimmed = input.title.trim();
+  if (!trimmed) return { error: "Podaj tytuł." };
+  if (!input.amountCents || input.amountCents <= 0) return { error: "Podaj kwotę." };
+  if (!input.categoryId) return { error: "Wybierz kategorię." };
+
+  const supabase = await createClient();
+
+  const { data: rule, error: ruleError } = await supabase
+    .from("recurring_rules")
+    .insert({
+      household_id: householdId,
+      wallet_id: walletId,
+      kind: input.kind,
+      title: trimmed,
+      amount_cents: input.amountCents,
+      category_id: input.categoryId,
+      freq: input.pattern.freq,
+      interval: input.pattern.interval,
+      weekdays: input.pattern.freq === "week" && input.pattern.weekdays.length ? input.pattern.weekdays : null,
+      start_date: input.date,
+      until_date: input.pattern.untilDate,
+      payment_url: input.paymentUrl,
+      grace_days: input.graceDays,
+      note: input.note,
+      is_automatic: input.isAutomatic,
+    })
+    .select("id")
+    .single();
+
+  if (ruleError || !rule) return { error: ruleError?.message ?? "Nie udało się utworzyć reguły." };
+
+  // Podpiecie istniejacego wiersza przed materializacja: dzieki temu ta data jest juz zajeta
+  // i nie powstanie drugie wystapienie obok.
+  const { error: updateError } = await supabase
+    .from("transactions")
+    .update({
+      kind: input.kind,
+      title: trimmed,
+      amount_cents: input.amountCents,
+      category_id: input.categoryId,
+      date: input.date,
+      is_paid: input.isPaid,
+      paid_at: input.isPaid ? new Date().toISOString() : null,
+      payment_url: input.paymentUrl,
+      grace_days: input.graceDays,
+      note: input.note,
+      is_automatic: input.isAutomatic,
+      recurring_rule_id: rule.id,
+      is_exception: false,
+    })
+    .eq("id", transactionId);
+  if (updateError) return { error: updateError.message };
+
+  await ensureMonthMaterialized(supabase, householdId, walletId, ymFromDate(input.date));
+
+  revalidatePath("/");
+  return { error: null };
+}
+
 /** Edycja pozycji cyklicznej w jednym z trzech zakresow. */
 export async function updateRecurringEntry(
   transactionId: string,

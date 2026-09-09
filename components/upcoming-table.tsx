@@ -29,6 +29,7 @@ import {
 import { TransactionForm, type EditingTransaction, type EditingRule } from "@/components/transaction-form";
 import { ScopeDialog, type Scope } from "@/components/scope-dialog";
 import { deleteTransaction, moveTransactionToNextMonth } from "@/lib/actions/transactions";
+import { deleteSplitTransaction, setSplitPaid } from "@/lib/actions/splits";
 import { deleteRecurringEntry } from "@/lib/actions/recurring";
 import { saveDraftRows, type DraftRowInput } from "@/lib/actions/drafts";
 import { createClient } from "@/lib/supabase/client";
@@ -61,6 +62,16 @@ export type UpcomingRow = {
   grace_days: number;
   note: string | null;
   is_automatic: boolean;
+  split_group_id: string | null;
+  split_label: string | null;
+};
+
+/** Platnosc widziana tak, jak w banku: pojedyncza pozycja albo grupa czesci z suma kwot. */
+type PaymentGroup = {
+  key: string;
+  head: UpcomingRow;
+  parts: UpcomingRow[];
+  total: number;
 };
 
 /** Data platnosci to termin, data dodania to moment wpisania pozycji — to dwie rozne rzeczy. */
@@ -113,6 +124,7 @@ export function UpcomingTable({
   const [showPaid, setShowPaid] = useState(false);
   const [editing, setEditing] = useState<EditingTransaction | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<UpcomingRow | null>(null);
+  const [expandedSplits, setExpandedSplits] = useState<Set<string>>(new Set());
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const lastInputRef = useRef<HTMLInputElement | null>(null);
@@ -175,26 +187,46 @@ export function UpcomingTable({
 
   const isPaid = (row: UpcomingRow) => overrides[row.id] ?? row.is_paid;
 
-  async function togglePaid(row: UpcomingRow) {
-    const next = !isPaid(row);
-    setOverrides((prev) => ({ ...prev, [row.id]: next }));
-    const supabase = createClient();
-    const { error } = await supabase
-      .from("transactions")
-      .update({ is_paid: next, paid_at: next ? new Date().toISOString() : null })
-      .eq("id", row.id);
-    if (error) {
-      setOverrides((prev) => ({ ...prev, [row.id]: row.is_paid }));
+  function toggleSplit(key: string) {
+    setExpandedSplits((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  }
+
+  /** Odhaczenie dotyczy calej platnosci — czesci jednego zakupu schodza z konta razem. */
+  async function togglePaid(group: PaymentGroup) {
+    const next = !isPaid(group.head);
+    const affected = group.parts.length > 0 ? group.parts : [group.head];
+    setOverrides((prev) => ({ ...prev, ...Object.fromEntries(affected.map((r) => [r.id, next])) }));
+
+    const result = group.parts.length
+      ? await setSplitPaid(group.key, next)
+      : await (async () => {
+          const supabase = createClient();
+          const { error } = await supabase
+            .from("transactions")
+            .update({ is_paid: next, paid_at: next ? new Date().toISOString() : null })
+            .eq("id", group.head.id);
+          return { error: error?.message ?? null };
+        })();
+
+    if (result.error) {
+      setOverrides((prev) => ({ ...prev, ...Object.fromEntries(affected.map((r) => [r.id, r.is_paid])) }));
       return;
     }
     router.refresh();
   }
 
-  function requestDelete(row: UpcomingRow) {
-    if (row.recurring_rule_id) {
-      setDeleteTarget(row);
+  function requestDelete(group: PaymentGroup) {
+    if (group.parts.length > 0) {
+      deleteSplitTransaction(group.key).then(() => router.refresh());
+    } else if (group.head.recurring_rule_id) {
+      setDeleteTarget(group.head);
     } else {
-      deleteTransaction(row.id).then(() => router.refresh());
+      deleteTransaction(group.head.id).then(() => router.refresh());
     }
   }
 
@@ -205,19 +237,39 @@ export function UpcomingTable({
     deleteRecurringEntry(id, scope).then(() => router.refresh());
   }
 
-  const sorted = (list: UpcomingRow[]) =>
-    [...list].sort((a, b) =>
+  /** Czesci jednej platnosci schodza sie w jeden wiersz z suma — taka kwota widnieje na wyciagu. */
+  function toGroups(list: UpcomingRow[]): PaymentGroup[] {
+    const splits = new Map<string, UpcomingRow[]>();
+    const groups: PaymentGroup[] = [];
+
+    for (const row of list) {
+      if (!row.split_group_id) {
+        groups.push({ key: row.id, head: row, parts: [], total: row.amount_cents });
+        continue;
+      }
+      const found = splits.get(row.split_group_id);
+      if (found) found.push(row);
+      else splits.set(row.split_group_id, [row]);
+    }
+    for (const [key, parts] of splits) {
+      groups.push({ key, head: parts[0], parts, total: parts.reduce((s, p) => s + p.amount_cents, 0) });
+    }
+
+    return groups.sort((a, b) =>
       sortKey === "created"
-        ? b.created_at.localeCompare(a.created_at)
-        : a.date.localeCompare(b.date) || a.title.localeCompare(b.title)
+        ? b.head.created_at.localeCompare(a.head.created_at)
+        : a.head.date.localeCompare(b.head.date) || a.head.title.localeCompare(b.head.title)
     );
+  }
 
   const filled = drafts.filter((r) => r.title.trim() && (parseAmountToCents(r.amount) ?? 0) > 0);
   const draftTotal = filled.reduce((sum, r) => sum + (parseAmountToCents(r.amount) ?? 0), 0);
-  const openRows = sorted(rows.filter((r) => !isPaid(r)));
-  const paidRows = sorted(rows.filter(isPaid));
-  const netTotal = openRows.reduce((sum, r) => sum + (r.kind === "income" ? r.amount_cents : -r.amount_cents), 0);
-  const paidTotal = paidRows.reduce((sum, r) => sum + (r.kind === "income" ? r.amount_cents : -r.amount_cents), 0);
+  const openGroups = toGroups(rows.filter((r) => !isPaid(r)));
+  const paidGroups = toGroups(rows.filter(isPaid));
+  const sumOf = (groups: PaymentGroup[]) =>
+    groups.reduce((sum, g) => sum + (g.head.kind === "income" ? g.total : -g.total), 0);
+  const netTotal = sumOf(openGroups);
+  const paidTotal = sumOf(paidGroups);
 
   async function saveAll() {
     if (filled.length === 0) return;
@@ -243,17 +295,18 @@ export function UpcomingTable({
   }
 
   /** Jedna siatka dla pozycji oplaconych i nieoplaconych, zeby kolumny wszedzie sie pokrywaly. */
-  function renderRow(row: UpcomingRow, withBorder: boolean) {
+  function renderGroup(group: PaymentGroup, withBorder: boolean) {
+    const row = group.head;
+    const split = group.parts.length > 0;
     const cat = categoryById.get(row.category_id);
     const paid = isPaid(row);
     const late = !paid && row.date < today;
+    const expanded = expandedSplits.has(group.key);
 
     return (
+      <div key={group.key} className={withBorder ? "border-t border-border" : ""}>
       <div
-        key={row.id}
-        className={`${GRID} items-center gap-1 px-2 py-2 text-base ${
-          withBorder ? "border-t border-border" : ""
-        } ${paid ? "text-muted-foreground" : ""}`}
+        className={`${GRID} items-center gap-1 px-2 py-2 text-base ${paid ? "text-muted-foreground" : ""}`}
       >
         <span
           className="mx-auto flex h-6 w-6 items-center justify-center rounded-full border border-border"
@@ -274,16 +327,42 @@ export function UpcomingTable({
           )}
           {row.note && <NotePopover note={row.note} />}
         </span>
-        <span className="flex min-w-0 items-center gap-1.5 truncate text-muted-foreground">
-          <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: cat?.color }} />
-          {cat ? categoryDisplayName(cat.name, locale, cat.name_en) : ""}
-        </span>
+        {split ? (
+          <button
+            type="button"
+            onClick={() => toggleSplit(group.key)}
+            className="flex min-w-0 items-center gap-1.5 text-left text-muted-foreground"
+            aria-expanded={expanded}
+          >
+            <span className="flex shrink-0 -space-x-1">
+              {group.parts.slice(0, 3).map((part) => (
+                <span
+                  key={part.id}
+                  className="h-2.5 w-2.5 rounded-full ring-1 ring-card"
+                  style={{ background: categoryById.get(part.category_id)?.color }}
+                />
+              ))}
+            </span>
+            <span className="truncate text-sm">
+              {group.parts.length} {t.splitCategories}
+            </span>
+            <ChevronDown
+              className="h-3.5 w-3.5 shrink-0 transition-transform"
+              style={{ transform: expanded ? "rotate(180deg)" : undefined }}
+            />
+          </button>
+        ) : (
+          <span className="flex min-w-0 items-center gap-1.5 truncate text-muted-foreground">
+            <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: cat?.color }} />
+            {cat ? categoryDisplayName(cat.name, locale, cat.name_en) : ""}
+          </span>
+        )}
         <span className="text-sm" style={{ color: late ? "var(--destructive)" : "var(--muted-foreground)" }}>
           {shortDate(row.date, locale)}
           {late && ` ${t.overdue}`}
         </span>
         <span className="text-sm text-muted-foreground">{shortDate(row.created_at.slice(0, 10), locale)}</span>
-        <span className="tabular text-right font-medium">{money(row.amount_cents, locale)}</span>
+        <span className="tabular text-right font-medium">{money(group.total, locale)}</span>
         <span className="flex justify-end">
           {!paid && row.payment_url && (
             <a
@@ -299,7 +378,7 @@ export function UpcomingTable({
         </span>
         <button
           type="button"
-          onClick={() => togglePaid(row)}
+          onClick={() => togglePaid(group)}
           className="tap-target mx-auto flex h-5 w-5 shrink-0 items-center justify-center rounded-[6px] border"
           style={{
             borderColor: paid ? "var(--primary)" : "var(--border)",
@@ -326,7 +405,7 @@ export function UpcomingTable({
                   id: row.id,
                   kind: row.kind,
                   title: row.title,
-                  amountCents: row.amount_cents,
+                  amountCents: group.total,
                   categoryId: row.category_id,
                   date: row.date,
                   isPaid: paid,
@@ -336,19 +415,57 @@ export function UpcomingTable({
                   isAutomatic: row.is_automatic,
                   recurringRuleId: row.recurring_rule_id,
                   rule: row.recurring_rule_id ? rules[row.recurring_rule_id] ?? null : null,
+                  splitGroupId: split ? group.key : null,
+                  splitParts: split
+                    ? group.parts.map((p) => ({
+                        id: p.id,
+                        categoryId: p.category_id,
+                        amountCents: p.amount_cents,
+                        label: p.split_label,
+                      }))
+                    : undefined,
                 })
               }
             >
               <Pencil className="h-4 w-4" /> {t.edit}
             </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => moveTransactionToNextMonth(row.id, row.date).then(() => router.refresh())}>
-              <ArrowRightCircle className="h-4 w-4" /> {t.moveNext}
-            </DropdownMenuItem>
-            <DropdownMenuItem variant="destructive" onClick={() => requestDelete(row)}>
+            {!split && (
+              <DropdownMenuItem
+                onClick={() => moveTransactionToNextMonth(row.id, row.date).then(() => router.refresh())}
+              >
+                <ArrowRightCircle className="h-4 w-4" /> {t.moveNext}
+              </DropdownMenuItem>
+            )}
+            <DropdownMenuItem variant="destructive" onClick={() => requestDelete(group)}>
               <Trash2 className="h-4 w-4" /> {t.del}
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
+      </div>
+
+      {split && expanded && (
+        <div className="bg-muted/40 pb-1">
+          {group.parts.map((part) => {
+            const partCat = categoryById.get(part.category_id);
+            return (
+              <div key={part.id} className={`${GRID} items-center gap-1 px-2 py-1.5 text-sm`}>
+                <span />
+                <span className="truncate pl-4 text-muted-foreground">{part.split_label || "—"}</span>
+                <span className="flex min-w-0 items-center gap-1.5 truncate">
+                  <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: partCat?.color }} />
+                  {partCat ? categoryDisplayName(partCat.name, locale, partCat.name_en) : ""}
+                </span>
+                <span />
+                <span />
+                <span className="tabular text-right">{money(part.amount_cents, locale)}</span>
+                <span />
+                <span />
+                <span />
+              </div>
+            );
+          })}
+        </div>
+      )}
       </div>
     );
   }
@@ -403,14 +520,12 @@ export function UpcomingTable({
             </div>
           )}
 
-          {openRows.map((row, i) => renderRow(row, i > 0))}
-
-          {paidRows.length > 0 && (
+          {paidGroups.length > 0 && (
             <>
               <button
                 type="button"
                 onClick={() => setShowPaid(!showPaid)}
-                className="flex w-full items-center gap-2 border-t border-border px-2 py-2.5 text-base text-muted-foreground hover:bg-muted/50"
+                className="flex w-full items-center gap-2 px-2 py-2.5 text-base text-muted-foreground hover:bg-muted/50"
                 aria-expanded={showPaid}
               >
                 <ChevronDown
@@ -418,13 +533,15 @@ export function UpcomingTable({
                   style={{ transform: showPaid ? "rotate(180deg)" : undefined }}
                 />
                 <span className="font-medium">
-                  {t.paidSection} ({paidRows.length})
+                  {t.paidSection} ({paidGroups.length})
                 </span>
                 <span className="tabular ml-auto">{money(paidTotal, locale)}</span>
               </button>
-              {showPaid && paidRows.map((row) => renderRow(row, true))}
+              {showPaid && paidGroups.map((group) => renderGroup(group, true))}
             </>
           )}
+
+          {openGroups.map((group, i) => renderGroup(group, i > 0 || paidGroups.length > 0))}
 
           {drafts.map((r, i) => {
             const isLast = i === drafts.length - 1;
@@ -537,7 +654,7 @@ export function UpcomingTable({
 
           {rows.length > 0 && drafts.length === 0 && (
             <div className="flex items-center justify-between border-t border-border bg-muted px-4 py-2.5 text-base">
-              <span className="font-medium">{openRows.length} {t.rows}</span>
+              <span className="font-medium">{openGroups.length} {t.rows}</span>
               <span className="tabular font-medium">{t.netTotal} {money(netTotal, locale)}</span>
             </div>
           )}

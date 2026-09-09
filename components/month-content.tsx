@@ -1,6 +1,6 @@
 import { MonthTabs } from "@/components/month-tabs";
 import { TransactionGroupList, type TxGroup, type TxRow } from "@/components/transaction-group-list";
-import type { EditingRule } from "@/components/transaction-form";
+import type { EditingRule, EditingSplitPart } from "@/components/transaction-form";
 import { UpcomingTable } from "@/components/upcoming-table";
 import { BudgetTiles, type BudgetRow } from "@/components/budget-tiles";
 import { OpeningBalance } from "@/components/opening-balance";
@@ -58,7 +58,7 @@ export async function MonthContent({
     supabase
       .from("transactions")
       .select(
-        "id, kind, title, amount_cents, category_id, date, is_paid, created_at, recurring_rule_id, payment_url, grace_days, note, is_automatic"
+        "id, kind, title, amount_cents, category_id, date, is_paid, created_at, recurring_rule_id, payment_url, grace_days, note, is_automatic, split_group_id, split_label"
       )
       .eq("household_id", householdId)
       .eq("wallet_id", walletId)
@@ -140,6 +140,20 @@ export async function MonthContent({
   // Zakladka Platnosci pokazuje caly miesiac; podzial na oplacone/nieoplacone i sortowanie robi klient.
   const paymentRows = monthTx;
 
+  // Czesci platnosci dzielonych, zeby edycja z widoku kategorii otwierala cala platnosc.
+  const splitGroups: Record<string, { total: number; parts: EditingSplitPart[] }> = {};
+  for (const tx of monthTx) {
+    if (!tx.split_group_id) continue;
+    const group = (splitGroups[tx.split_group_id] ??= { total: 0, parts: [] });
+    group.total += tx.amount_cents;
+    group.parts.push({
+      id: tx.id,
+      categoryId: tx.category_id,
+      amountCents: tx.amount_cents,
+      label: tx.split_label,
+    });
+  }
+
   return (
     <>
       {/* Prawa kolumna na mobile jest u góry */}
@@ -213,6 +227,7 @@ export async function MonthContent({
                 walletId={walletId}
                 categories={categories}
                 rules={rulesMap}
+                splitGroups={splitGroups}
                 today={today}
                 defaultDate={defaultDate}
               />
@@ -225,6 +240,7 @@ export async function MonthContent({
                 walletId={walletId}
                 categories={categories}
                 rules={rulesMap}
+                splitGroups={splitGroups}
                 today={today}
                 defaultDate={defaultDate}
               />

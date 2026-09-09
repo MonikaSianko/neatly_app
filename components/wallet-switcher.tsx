@@ -2,7 +2,7 @@
 
 import { useOptimistic, useState, useTransition } from "react";
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
-import { ChevronDown, Check, Plus } from "lucide-react";
+import { ChevronDown, Check, Plus, Pencil } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -17,7 +17,7 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import { EmojiPicker } from "@/components/emoji-picker";
-import { createWallet } from "@/lib/actions/wallets";
+import { createWallet, updateWallet } from "@/lib/actions/wallets";
 import { useLocale } from "@/components/locale-provider";
 
 type Wallet = { id: string; name: string; emoji: string | null };
@@ -36,7 +36,8 @@ export function WalletSwitcher({
   const searchParams = useSearchParams();
   const { t } = useLocale();
 
-  const [creating, setCreating] = useState(false);
+  // null = arkusz zamkniety, "new" = nowy portfel, id = edycja istniejacego.
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [name, setName] = useState("");
   const [emoji, setEmoji] = useState("📁");
   const [error, setError] = useState<string | null>(null);
@@ -56,17 +57,41 @@ export function WalletSwitcher({
     });
   }
 
-  function submitCreate(e: React.FormEvent) {
+  function openCreate() {
+    setName("");
+    setEmoji("📁");
+    setError(null);
+    setEditingId("new");
+  }
+
+  function openEdit(wallet: Wallet) {
+    setName(wallet.name);
+    setEmoji(wallet.emoji ?? "📁");
+    setError(null);
+    setEditingId(wallet.id);
+  }
+
+  function submitWallet(e: React.FormEvent) {
     e.preventDefault();
     startTransition(async () => {
+      if (editingId && editingId !== "new") {
+        const result = await updateWallet(editingId, name, emoji);
+        if (result.error) {
+          setError(result.error);
+          return;
+        }
+        setEditingId(null);
+        setError(null);
+        router.refresh();
+        return;
+      }
+
       const result = await createWallet(householdId, name, emoji);
       if (result.error || !result.wallet) {
         setError(result.error);
         return;
       }
-      setCreating(false);
-      setName("");
-      setEmoji("📁");
+      setEditingId(null);
       setError(null);
       select(result.wallet.id);
     });
@@ -92,22 +117,34 @@ export function WalletSwitcher({
               <span aria-hidden>{w.emoji}</span>
               <span className="flex-1 truncate">{w.name}</span>
               {w.id === active?.id && <Check className="h-4 w-4" />}
+              <button
+                type="button"
+                aria-label={`${t.edit}: ${w.name}`}
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  openEdit(w);
+                }}
+                className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-background"
+              >
+                <Pencil className="h-3.5 w-3.5" />
+              </button>
             </DropdownMenuItem>
           ))}
           <DropdownMenuSeparator />
-          <DropdownMenuItem onClick={() => setCreating(true)}>
+          <DropdownMenuItem onClick={openCreate}>
             <Plus className="h-4 w-4" />
             {t.newWallet}
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
 
-      <Sheet open={creating} onOpenChange={setCreating}>
+      <Sheet open={editingId !== null} onOpenChange={(open) => !open && setEditingId(null)}>
         <SheetContent>
           <SheetHeader>
-            <SheetTitle>{t.newWallet}</SheetTitle>
+            <SheetTitle>{editingId === "new" ? t.newWallet : t.editWallet}</SheetTitle>
           </SheetHeader>
-          <form onSubmit={submitCreate} className="flex flex-col gap-4 px-4 pb-4">
+          <form onSubmit={submitWallet} className="flex flex-col gap-4 px-4 pb-4">
             <div>
               <label className="mb-1.5 block text-base font-medium">{t.walletName}</label>
               <input
@@ -129,7 +166,7 @@ export function WalletSwitcher({
               className="rounded-[10px] px-4 py-2.5 text-base font-medium text-primary-foreground disabled:opacity-50"
               style={{ background: "var(--primary)" }}
             >
-              {t.createWallet}
+              {editingId === "new" ? t.createWallet : t.save}
             </button>
           </form>
         </SheetContent>

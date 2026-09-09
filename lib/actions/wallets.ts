@@ -24,3 +24,15 @@ export async function createWallet(householdId: string, name: string, emoji: str
   revalidatePath("/");
   return { error: null, wallet: data };
 }
+
+export async function updateWallet(id: string, name: string, emoji: string) {
+  const trimmed = name.trim();
+  if (!trimmed) return { error: "Podaj nazwę portfela." };
+
+  const supabase = await createClient();
+  const { error } = await supabase.from("wallets").update({ name: trimmed, emoji }).eq("id", id);
+
+  if (error) return { error: error.message };
+  revalidatePath("/");
+  return { error: null };
+}
