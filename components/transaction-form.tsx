@@ -23,6 +23,7 @@ import {
 import { money } from "@/lib/format";
 import { parseAmountToCents } from "@/lib/format";
 import { useLocale } from "@/components/locale-provider";
+import { useKeyboardInset } from "@/lib/use-keyboard-inset";
 import { WEEKDAYS, categoryDisplayName } from "@/lib/i18n";
 
 type Category = { id: string; name: string; name_en: string | null; emoji: string; kind: "expense" | "income" };
@@ -98,8 +99,8 @@ export function TransactionForm({
   const { t } = useLocale();
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent className="sm:max-w-md">
-        <SheetHeader>
+      <SheetContent side="full" className="gap-0 overflow-hidden">
+        <SheetHeader className="shrink-0 border-b border-border">
           <SheetTitle>{editing ? t.editEntry : t.newEntry}</SheetTitle>
         </SheetHeader>
         {open && (
@@ -168,6 +169,7 @@ function TransactionFormFields({
   const [untilMode, setUntilMode] = useState<"never" | "date">(editing?.rule?.untilDate ? "date" : "never");
   const [untilDate, setUntilDate] = useState(editing?.rule?.untilDate ?? "");
 
+  const keyboardInset = useKeyboardInset();
   const [scopeOpen, setScopeOpen] = useState(false);
   const [pendingInput, setPendingInput] = useState<RecurringEntryInput | null>(null);
 
@@ -367,7 +369,12 @@ function TransactionFormFields({
 
   return (
     <>
-      <form onSubmit={submit} className="flex flex-col gap-4 overflow-y-auto px-4 pb-4">
+      {/* Padding rowny klawiaturze — dzieki niemu formularz przewija sie tez przy otwartej klawiaturze. */}
+      <form
+        onSubmit={submit}
+        className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto overscroll-contain px-4 pt-4"
+        style={{ paddingBottom: `calc(${keyboardInset}px + env(safe-area-inset-bottom) + 1rem)` }}
+      >
         <div className="flex items-center justify-center gap-3">
           <button
             type="button"
@@ -414,6 +421,7 @@ function TransactionFormFields({
                 <div key={part.key} className="flex items-start gap-2">
                   <div className="flex min-w-0 flex-1 flex-col gap-1.5">
                     <CategoryCombobox
+                      fullscreenOnMobile
                       options={categoryOptions}
                       value={part.categoryId}
                       onChange={(categoryId) =>
@@ -468,7 +476,7 @@ function TransactionFormFields({
               </div>
             </div>
           ) : (
-            <CategoryCombobox options={categoryOptions} value={categoryId} onChange={setCategoryId} />
+            <CategoryCombobox fullscreenOnMobile options={categoryOptions} value={categoryId} onChange={setCategoryId} />
           )}
 
           {!isEditingRecurring && repeat === "never" && (
