@@ -297,7 +297,7 @@ export function UpcomingTable({
     router.refresh();
   }
 
-  /** Na telefonie edycje otwiera dotkniecie wiersza, na desktopie menu — jedno zrodlo danych. */
+  /** Edycje otwiera menu (...) — i na telefonie, i na desktopie, z jednego zrodla danych. */
   function openEdit(group: PaymentGroup) {
     const row = group.head;
     const split = group.parts.length > 0;
@@ -350,10 +350,10 @@ export function UpcomingTable({
 
     return (
       <div key={group.key} className={withBorder ? "border-t border-border" : ""}>
-      {/* Telefon: dwie linie zamiast dziewieciu kolumn. Dotkniecie wiersza otwiera edycje,
-          wiec nie ma osobnego menu obok checkboxa. */}
+      {/* Telefon: dwie linie zamiast dziewieciu kolumn. Akcje siedza w menu (...),
+          zeby przypadkowe dotkniecie wiersza nie otwieralo edycji. */}
       <div className={`flex items-center gap-2 px-3 py-2.5 lg:hidden ${paid ? "text-muted-foreground" : ""}`}>
-        <button type="button" onClick={() => openEdit(group)} className="min-w-0 flex-1 text-left">
+        <div className="min-w-0 flex-1">
           <span className="flex items-center gap-1.5">
             {split ? (
               <span className="flex shrink-0 items-center">
@@ -383,22 +383,9 @@ export function UpcomingTable({
               {late && ` ${t.overdue}`}
             </span>
           </span>
-        </button>
+        </div>
 
         <span className="tabular shrink-0 text-base font-semibold">{money(group.total, locale)}</span>
-
-        {!paid && row.payment_url && (
-          <a
-            href={row.payment_url}
-            target="_blank"
-            rel="noopener noreferrer"
-            aria-label={t.payNow}
-            className="tap-target flex h-9 w-9 shrink-0 items-center justify-center rounded-full"
-            style={payNowStyle(paymentStatus(row.date, row.grace_days, today))}
-          >
-            <ExternalLink className="h-4 w-4" />
-          </a>
-        )}
 
         {split && (
           <button
@@ -427,6 +414,33 @@ export function UpcomingTable({
         >
           {paid && <Check className="h-4 w-4 text-primary-foreground" />}
         </button>
+
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <button
+              type="button"
+              className="tap-target flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-muted-foreground"
+              aria-label={t.rowMenu}
+            >
+              <MoreVertical className="h-5 w-5" />
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem onClick={() => openEdit(group)}>
+              <Pencil className="h-4 w-4" /> {t.edit}
+            </DropdownMenuItem>
+            <DropdownMenuItem variant="destructive" onClick={() => requestDelete(group)}>
+              <Trash2 className="h-4 w-4" /> {t.del}
+            </DropdownMenuItem>
+            {!paid && row.payment_url && (
+              <DropdownMenuItem asChild>
+                <a href={row.payment_url} target="_blank" rel="noopener noreferrer">
+                  <ExternalLink className="h-4 w-4" /> {t.payNow}
+                </a>
+              </DropdownMenuItem>
+            )}
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
 
       <div
