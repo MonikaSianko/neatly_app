@@ -1,7 +1,8 @@
 "use client";
 
-import { createContext, useContext, useState, type ReactNode } from "react";
+import { createContext, useContext, useState, useTransition, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
+import { usePendingSignal } from "@/components/pending-provider";
 import { STR, type Locale, type Dict } from "@/lib/i18n";
 import { setLocale as setLocaleAction } from "@/lib/actions/profile";
 
@@ -16,10 +17,17 @@ const LocaleContext = createContext<LocaleContextValue | null>(null);
 export function LocaleProvider({ initialLocale, children }: { initialLocale: Locale; children: ReactNode }) {
   const [locale, setLocaleState] = useState<Locale>(initialLocale);
   const router = useRouter();
+  const [pending, startTransition] = useTransition();
+  // Jezyk przelacza sie od razu w przegladarce, ale teksty z serwera dochodza po odswiezeniu —
+  // pasek u gory pokazuje, ze reszta strony wciaz sie przestawia.
+  usePendingSignal(pending);
 
   function setLocale(next: Locale) {
     setLocaleState(next);
-    setLocaleAction(next).then(() => router.refresh());
+    startTransition(async () => {
+      await setLocaleAction(next);
+      router.refresh();
+    });
   }
 
   return <LocaleContext.Provider value={{ locale, t: STR[locale], setLocale }}>{children}</LocaleContext.Provider>;

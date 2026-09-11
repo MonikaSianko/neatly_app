@@ -1,7 +1,6 @@
 "use client";
 
 import { useRef, useState } from "react";
-import { useRouter } from "next/navigation";
 import {
   ArrowDownLeft,
   ArrowUpRight,
@@ -15,6 +14,8 @@ import {
   Zap,
   Pencil,
   Trash2,
+  Undo2,
+  Search,
 } from "lucide-react";
 import { DraftRecurrenceDialog } from "@/components/draft-recurrence-dialog";
 import { NotePopover } from "@/components/note-popover";
@@ -32,10 +33,12 @@ import { deleteSplitTransaction, setSplitPaid } from "@/lib/actions/splits";
 import { deleteRecurringEntry } from "@/lib/actions/recurring";
 import { saveDraftRows, type DraftRowInput } from "@/lib/actions/drafts";
 import { createClient } from "@/lib/supabase/client";
-import { money, shortDate, parseAmountToCents, payNowStyle } from "@/lib/format";
+import { money, shortDate, parseAmountToCents, payNowStyle, foldText, amountText } from "@/lib/format";
 import { paymentStatus } from "@/lib/month";
 import type { RecurrencePattern } from "@/lib/actions/recurring";
 import { useLocale } from "@/components/locale-provider";
+import { Spinner } from "@/components/ui/spinner";
+import { useAction } from "@/lib/use-action";
 import { categoryDisplayName } from "@/lib/i18n";
 
 type Category = {
@@ -63,6 +66,9 @@ export type UpcomingRow = {
   is_automatic: boolean;
   split_group_id: string | null;
   split_label: string | null;
+  /** Zwrot: przychod pomniejszajacy konkretny wydatek. */
+  is_refund: boolean;
+  refund_of_id: string | null;
 };
 
 /** Platnosc widziana tak, jak w banku: pojedyncza pozycja albo grupa czesci z suma kwot. */
@@ -103,6 +109,7 @@ function mkRow(kind: "expense" | "income", categoryId: string, date: string, pat
 
 export function UpcomingTable({
   rows,
+  refundParents,
   categories,
   householdId,
   walletId,
@@ -111,6 +118,8 @@ export function UpcomingTable({
   defaultDate,
 }: {
   rows: UpcomingRow[];
+  /** Tytuly zwracanych platnosci po id — zwrot sam z siebie nie mowi, czego dotyczy. */
+  refundParents: Record<string, string>;
   categories: Category[];
   householdId: string;
   walletId: string;
@@ -118,18 +127,17 @@ export function UpcomingTable({
   today: string;
   defaultDate: string;
 }) {
-  const router = useRouter();
   const { locale, t } = useLocale();
   const [drafts, setDrafts] = useState<DraftRow[]>([]);
   const [recIdx, setRecIdx] = useState<number | null>(null);
   const [overrides, setOverrides] = useState<Record<string, boolean>>({});
   const [sortKey, setSortKey] = useState<SortKey>("date");
+  const [query, setQuery] = useState("");
   const [showPaid, setShowPaid] = useState(false);
   const [editing, setEditing] = useState<EditingTransaction | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<UpcomingRow | null>(null);
   const [expandedSplits, setExpandedSplits] = useState<Set<string>>(new Set());
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const { pending, busy, error, run } = useAction();
   const lastInputRef = useRef<HTMLInputElement | null>(null);
 
   const categoryById = new Map(categories.map((c) => [c.id, c]));
@@ -200,36 +208,41 @@ export function UpcomingTable({
   }
 
   /** Odhaczenie dotyczy calej platnosci — czesci jednego zakupu schodza z konta razem. */
-  async function togglePaid(group: PaymentGroup) {
+  function togglePaid(group: PaymentGroup) {
     const next = !isPaid(group.head);
     const affected = group.parts.length > 0 ? group.parts : [group.head];
     setOverrides((prev) => ({ ...prev, ...Object.fromEntries(affected.map((r) => [r.id, next])) }));
 
-    const result = group.parts.length
-      ? await setSplitPaid(group.key, next)
-      : await (async () => {
-          const supabase = createClient();
-          const { error } = await supabase
-            .from("transactions")
-            .update({ is_paid: next, paid_at: next ? new Date().toISOString() : null })
-            .eq("id", group.head.id);
-          return { error: error?.message ?? null };
-        })();
+    run(
+      async () => {
+        const result = group.parts.length
+          ? await setSplitPaid(group.key, next)
+          : await (async () => {
+              const supabase = createClient();
+              const { error: dbError } = await supabase
+                .from("transactions")
+                .update({ is_paid: next, paid_at: next ? new Date().toISOString() : null })
+                .eq("id", group.head.id);
+              return { error: dbError?.message ?? null };
+            })();
 
-    if (result.error) {
-      setOverrides((prev) => ({ ...prev, ...Object.fromEntries(affected.map((r) => [r.id, r.is_paid])) }));
-      return;
-    }
-    router.refresh();
+        // Odhaczenie zmienia wiersz od razu, wiec nieudany zapis trzeba cofnac na ekranie.
+        if (result.error) {
+          setOverrides((prev) => ({ ...prev, ...Object.fromEntries(affected.map((r) => [r.id, r.is_paid])) }));
+        }
+        return result;
+      },
+      { key: group.key }
+    );
   }
 
   function requestDelete(group: PaymentGroup) {
     if (group.parts.length > 0) {
-      deleteSplitTransaction(group.key).then(() => router.refresh());
+      run(() => deleteSplitTransaction(group.key), { key: group.key });
     } else if (group.head.recurring_rule_id) {
       setDeleteTarget(group.head);
     } else {
-      deleteTransaction(group.head.id).then(() => router.refresh());
+      run(() => deleteTransaction(group.head.id), { key: group.key });
     }
   }
 
@@ -237,7 +250,7 @@ export function UpcomingTable({
     if (!deleteTarget) return;
     const id = deleteTarget.id;
     setDeleteTarget(null);
-    deleteRecurringEntry(id, scope).then(() => router.refresh());
+    run(() => deleteRecurringEntry(id, scope), { key: id });
   }
 
   /** Czesci jednej platnosci schodza sie w jeden wiersz z suma — taka kwota widnieje na wyciagu. */
@@ -265,19 +278,46 @@ export function UpcomingTable({
     );
   }
 
+  /**
+   * Szukanie po tym, co widac w wierszu: tytul, kategoria, doprecyzowanie czesci i kwota.
+   * Kwoty porownujemy tekstem ("147" trafia w "147,00"), bo tak sie ich szuka — po tym,
+   * co widnieje na ekranie, a nie po groszach.
+   */
+  function matches(group: PaymentGroup): boolean {
+    const q = foldText(query.trim());
+    if (!q) return true;
+
+    const parts = group.parts.length > 0 ? group.parts : [group.head];
+    const words = [
+      group.head.title,
+      ...parts.map((p) => p.split_label ?? ""),
+      ...parts.map((p) => {
+        const cat = categoryById.get(p.category_id);
+        return cat ? categoryDisplayName(cat.name, locale, cat.name_en) : "";
+      }),
+    ];
+    if (words.some((word) => foldText(word).includes(q))) return true;
+
+    const digits = q.replace(/\s/g, "").replace(".", ",");
+    return [group.total, ...parts.map((p) => p.amount_cents)].some((cents) => amountText(cents).includes(digits));
+  }
+
   const filled = drafts.filter((r) => r.title.trim() && (parseAmountToCents(r.amount) ?? 0) > 0);
   const draftTotal = filled.reduce((sum, r) => sum + (parseAmountToCents(r.amount) ?? 0), 0);
-  const openGroups = toGroups(rows.filter((r) => !isPaid(r)));
-  const paidGroups = toGroups(rows.filter(isPaid));
+  const allOpen = toGroups(rows.filter((r) => !isPaid(r)));
+  const allPaid = toGroups(rows.filter(isPaid));
+  const openGroups = allOpen.filter(matches);
+  const paidGroups = allPaid.filter(matches);
+  const total = allOpen.length + allPaid.length;
+  const shown = openGroups.length + paidGroups.length;
+  const filtering = query.trim().length > 0;
   const sumOf = (groups: PaymentGroup[]) =>
     groups.reduce((sum, g) => sum + (g.head.kind === "income" ? g.total : -g.total), 0);
   const netTotal = sumOf(openGroups);
   const paidTotal = sumOf(paidGroups);
 
-  async function saveAll() {
+  function saveAll() {
     if (filled.length === 0) return;
-    setSaving(true);
-    setError(null);
     const input: DraftRowInput[] = filled.map((r) => ({
       kind: r.kind,
       title: r.title,
@@ -287,14 +327,7 @@ export function UpcomingTable({
       isPaid: r.isPaid,
       pattern: r.pattern,
     }));
-    const result = await saveDraftRows(householdId, walletId, input);
-    setSaving(false);
-    if (result.error) {
-      setError(result.error);
-      return;
-    }
-    setDrafts([]);
-    router.refresh();
+    run(() => saveDraftRows(householdId, walletId, input), { onSuccess: () => setDrafts([]) });
   }
 
   /** Edycje otwiera menu (...) — i na telefonie, i na desktopie, z jednego zrodla danych. */
@@ -315,6 +348,8 @@ export function UpcomingTable({
       isAutomatic: row.is_automatic,
       recurringRuleId: row.recurring_rule_id,
       rule: row.recurring_rule_id ? rules[row.recurring_rule_id] ?? null : null,
+      isRefund: row.is_refund,
+      refundOfId: row.refund_of_id,
       splitGroupId: split ? group.key : null,
       splitParts: split
         ? group.parts.map((p) => ({
@@ -325,6 +360,21 @@ export function UpcomingTable({
           }))
         : undefined,
     });
+  }
+
+  /**
+   * Tytul zwrotu z nazwa zwracanej platnosci z przodu. Doklejana czesc ma kolor marki,
+   * zeby bylo widac, ze to nie jest czesc wpisanej nazwy.
+   */
+  function rowTitle(row: UpcomingRow) {
+    const parent = row.is_refund && row.refund_of_id ? refundParents[row.refund_of_id] : null;
+    if (!parent) return row.title;
+    return (
+      <>
+        <span style={{ color: "var(--neatly-primary-dark)" }}>{parent} — </span>
+        {row.title}
+      </>
+    );
   }
 
   /** Jedna siatka dla pozycji oplaconych i nieoplaconych, zeby kolumny wszedzie sie pokrywaly. */
@@ -348,8 +398,17 @@ export function UpcomingTable({
         ? categoryDisplayName(cat.name, locale, cat.name_en)
         : "";
 
+    // Wiersz w trakcie zapisu przygasa i nie przyjmuje kolejnych klikniec, zeby podwojne
+    // dotkniecie nie wyslalo dwoch sprzecznych zmian.
+    const waiting = busy(group.key);
+
     return (
-      <div key={group.key} className={withBorder ? "border-t border-border" : ""}>
+      <div
+        key={group.key}
+        className={withBorder ? "border-t border-border" : ""}
+        style={waiting ? { opacity: 0.55, pointerEvents: "none" } : undefined}
+        aria-busy={waiting || undefined}
+      >
       {/* Telefon: dwie linie zamiast dziewieciu kolumn. Akcje siedza w menu (...),
           zeby przypadkowe dotkniecie wiersza nie otwieralo edycji. */}
       <div className={`flex items-center gap-2 px-3 py-2.5 lg:hidden ${paid ? "text-muted-foreground" : ""}`}>
@@ -368,7 +427,10 @@ export function UpcomingTable({
             ) : (
               <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: cat?.color }} />
             )}
-            <span className="truncate text-base font-medium">{row.title}</span>
+            <span className="truncate text-base font-medium">{rowTitle(row)}</span>
+            {row.is_refund && (
+              <Undo2 className="h-3.5 w-3.5 shrink-0" style={{ color: "var(--neatly-primary-dark)" }} aria-label={t.refundOne} />
+            )}
             {row.recurring_rule_id && <Repeat className="h-3 w-3 shrink-0 text-muted-foreground" />}
             {row.is_automatic && <Zap className="h-3.5 w-3.5 shrink-0" style={{ color: "var(--neatly-primary-dark)" }} />}
           </span>
@@ -412,7 +474,11 @@ export function UpcomingTable({
           }}
           aria-label={row.kind === "income" ? t.received : t.paid}
         >
-          {paid && <Check className="h-4 w-4 text-primary-foreground" />}
+          {waiting ? (
+            <Spinner className="h-4 w-4" />
+          ) : (
+            paid && <Check className="h-4 w-4 text-primary-foreground" />
+          )}
         </button>
 
         <DropdownMenu>
@@ -449,12 +515,25 @@ export function UpcomingTable({
         <span
           className="mx-auto flex h-6 w-6 items-center justify-center rounded-full border border-border"
           style={{ color: row.kind === "expense" ? "var(--destructive)" : "var(--neatly-primary-dark)" }}
-          aria-label={row.kind === "expense" ? t.expense : t.incomeOne}
+          aria-label={row.is_refund ? t.refundOne : row.kind === "expense" ? t.expense : t.incomeOne}
         >
-          {row.kind === "expense" ? <ArrowUpRight className="h-3.5 w-3.5" /> : <ArrowDownLeft className="h-3.5 w-3.5" />}
+          {row.is_refund ? (
+            <Undo2 className="h-3.5 w-3.5" />
+          ) : row.kind === "expense" ? (
+            <ArrowUpRight className="h-3.5 w-3.5" />
+          ) : (
+            <ArrowDownLeft className="h-3.5 w-3.5" />
+          )}
         </span>
         <span className="flex min-w-0 items-center gap-1.5">
-          <span className="truncate">{row.title}</span>
+          <span className="truncate">{rowTitle(row)}</span>
+          {row.is_refund && (
+            <Undo2
+              className="h-3.5 w-3.5 shrink-0"
+              style={{ color: "var(--neatly-primary-dark)" }}
+              aria-label={t.refundOne}
+            />
+          )}
           {row.recurring_rule_id && <Repeat className="h-3 w-3 shrink-0 text-muted-foreground" aria-label={t.repeat} />}
           {row.is_automatic && (
             <Zap
@@ -524,7 +603,11 @@ export function UpcomingTable({
           }}
           aria-label={row.kind === "income" ? t.received : t.paid}
         >
-          {paid && <Check className="h-3 w-3 text-primary-foreground" />}
+          {waiting ? (
+            <Spinner className="h-3 w-3" />
+          ) : (
+            paid && <Check className="h-3 w-3 text-primary-foreground" />
+          )}
         </button>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
@@ -586,7 +669,30 @@ export function UpcomingTable({
 
   return (
     <>
-      <div className="mb-3 flex flex-wrap items-center gap-2 text-base">
+      <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
+        <div className="relative sm:min-w-64 sm:flex-1 lg:max-w-96">
+          <Search className="pointer-events-none absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <input
+            type="search"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder={t.searchPayments}
+            aria-label={t.searchPayments}
+            className="min-h-11 w-full rounded-[10px] border border-border bg-card pr-10 pl-9 text-base sm:min-h-9"
+          />
+          {filtering && (
+            <button
+              type="button"
+              onClick={() => setQuery("")}
+              aria-label={t.clearSearch}
+              className="absolute top-1/2 right-1 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full text-muted-foreground hover:bg-muted"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          )}
+        </div>
+
+        <div className="flex flex-wrap items-center gap-2 text-base">
         <span className="text-muted-foreground">{t.sortBy}</span>
         <div className="flex gap-1 rounded-full border border-border bg-card p-1">
           {(
@@ -610,17 +716,26 @@ export function UpcomingTable({
             </button>
           ))}
         </div>
+
+        {filtering && (
+          <span className="text-sm text-muted-foreground">
+            {t.filteredCount} {shown} {t.ofPayments} {total}
+          </span>
+        )}
+        </div>
       </div>
 
       <div className="overflow-x-auto rounded-[14px] border border-border bg-card">
         {/* Szerokosc minimalna dopiero od lg, gdzie tabela ma sie gdzie zmiescic. Nizej
             wchodzi uklad dwuwierszowy, wiec przewijanie w poziomie nigdy nie jest potrzebne. */}
         <div className="lg:min-w-[812px]">
-          {rows.length === 0 && drafts.length === 0 && (
-            <div className="px-4 py-10 text-center text-base text-muted-foreground">{t.noUpcoming}</div>
+          {shown === 0 && drafts.length === 0 && (
+            <div className="px-4 py-10 text-center text-base text-muted-foreground">
+              {filtering ? t.noResults : t.noUpcoming}
+            </div>
           )}
 
-          {(rows.length > 0 || drafts.length > 0) && (
+          {(shown > 0 || drafts.length > 0) && (
             <div
               className={`${GRID} hidden items-center gap-1 border-b border-border bg-muted/50 px-2 py-2 text-xs font-medium tracking-wide text-muted-foreground uppercase lg:grid`}
             >
@@ -803,10 +918,11 @@ export function UpcomingTable({
             <button
               type="button"
               onClick={saveAll}
-              disabled={saving || filled.length === 0}
-              className="rounded-[10px] px-4 py-1.5 text-base font-medium text-primary-foreground disabled:opacity-50"
+              disabled={pending || filled.length === 0}
+              className="flex items-center gap-2 rounded-[10px] px-4 py-1.5 text-base font-medium text-primary-foreground disabled:opacity-50"
               style={{ background: "var(--primary)" }}
             >
+              {pending && <Spinner />}
               {t.saveAll}
             </button>
           </>

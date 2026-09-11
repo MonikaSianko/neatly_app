@@ -1,9 +1,11 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState } from "react";
 import { Copy, Check } from "lucide-react";
 import { createHouseholdInvite } from "@/app/household/actions";
 import { useLocale } from "@/components/locale-provider";
+import { Spinner } from "@/components/ui/spinner";
+import { useAction } from "@/lib/use-action";
 
 type Invite = { code: string; expires_at: string };
 
@@ -19,20 +21,18 @@ export function InvitePanel({
   const { locale, t } = useLocale();
   const [invite, setInvite] = useState<Invite | null>(initialInvite);
   const [copied, setCopied] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [pending, startTransition] = useTransition();
+  const { pending, error, run } = useAction();
 
   function generate() {
-    startTransition(async () => {
-      const result = await createHouseholdInvite(householdId);
-      if (result.error) {
-        setError(result.error);
-        return;
-      }
-      setError(null);
-      setInvite(result.invite ?? null);
-      setCopied(false);
-    });
+    run(
+      async () => {
+        const result = await createHouseholdInvite(householdId);
+        if (result.error) return result;
+        setInvite(result.invite ?? null);
+        setCopied(false);
+      },
+      { refresh: false }
+    );
   }
 
   function copyLink() {
@@ -68,8 +68,9 @@ export function InvitePanel({
           type="button"
           onClick={generate}
           disabled={pending}
-          className="w-fit rounded-[10px] border border-border px-3 py-2 text-base font-medium hover:bg-muted disabled:opacity-50"
+          className="flex w-fit items-center gap-2 rounded-[10px] border border-border px-3 py-2 text-base font-medium hover:bg-muted disabled:opacity-50"
         >
+          {pending && <Spinner />}
           {t.invitePerson}
         </button>
       )}

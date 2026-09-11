@@ -1,8 +1,7 @@
 "use client";
 
-import { useState, useTransition } from "react";
-import { useRouter } from "next/navigation";
-import { Minus, Plus, X, Zap } from "lucide-react";
+import { useEffect, useState } from "react";
+import { Minus, Plus, Undo2, X, Zap } from "lucide-react";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { createTransaction, updateTransaction } from "@/lib/actions/transactions";
 import {
@@ -14,16 +13,19 @@ import {
 } from "@/lib/actions/recurring";
 import { ScopeDialog, type Scope } from "@/components/scope-dialog";
 import { CategoryCombobox } from "@/components/category-combobox";
+import { listRefundTargets, type RefundTarget } from "@/lib/actions/refunds";
 import {
   createSplitTransaction,
   updateSplitTransaction,
   convertToSplit,
   mergeSplitToSingle,
 } from "@/lib/actions/splits";
-import { money } from "@/lib/format";
+import { money, shortDate } from "@/lib/format";
 import { parseAmountToCents } from "@/lib/format";
 import { useLocale } from "@/components/locale-provider";
 import { useKeyboardInset } from "@/lib/use-keyboard-inset";
+import { useAction } from "@/lib/use-action";
+import { Spinner } from "@/components/ui/spinner";
 import { WEEKDAYS, categoryDisplayName } from "@/lib/i18n";
 
 type Category = { id: string; name: string; name_en: string | null; emoji: string; kind: "expense" | "income" };
@@ -54,6 +56,9 @@ export type EditingTransaction = {
   /** Ustawione, gdy edytujemy platnosc podzielona na kategorie — wtedy id dotyczy grupy, nie wiersza. */
   splitGroupId?: string | null;
   splitParts?: EditingSplitPart[];
+  /** Zwrot: przychod zwracajacy konkretny wydatek, ksiegowany w jego kategorii. */
+  isRefund?: boolean;
+  refundOfId?: string | null;
 };
 
 type PartDraft = { key: string; id?: string; categoryId: string; amount: string; label: string };
@@ -134,7 +139,6 @@ function TransactionFormFields({
   defaultDate: string;
   editing?: EditingTransaction | null;
 }) {
-  const router = useRouter();
   const { locale, t } = useLocale();
   const weekdayLabels = WEEKDAYS[locale];
   const [kind, setKind] = useState<"expense" | "income">(editing?.kind ?? "expense");
@@ -148,6 +152,9 @@ function TransactionFormFields({
   const [note, setNote] = useState(editing?.note ?? "");
   const [isAutomatic, setIsAutomatic] = useState(editing?.isAutomatic ?? false);
   const [isSplit, setIsSplit] = useState(!!editing?.splitGroupId);
+  const [isRefund, setIsRefund] = useState(!!editing?.isRefund);
+  const [refundOfId, setRefundOfId] = useState<string | null>(editing?.refundOfId ?? null);
+  const [refundTargets, setRefundTargets] = useState<RefundTarget[] | null>(null);
   const [parts, setParts] = useState<PartDraft[]>(() =>
     editing?.splitParts?.length
       ? editing.splitParts.map((p) => ({
@@ -159,8 +166,7 @@ function TransactionFormFields({
         }))
       : [newPart(), newPart()]
   );
-  const [error, setError] = useState<string | null>(null);
-  const [pending, startTransition] = useTransition();
+  const { pending, error, setError, run } = useAction();
 
   const [repeat, setRepeat] = useState<RepeatPreset>(presetFromRule(editing?.rule));
   const [customFreq, setCustomFreq] = useState<"day" | "week" | "month" | "year">(editing?.rule?.freq ?? "month");
@@ -173,6 +179,18 @@ function TransactionFormFields({
   const [scopeOpen, setScopeOpen] = useState(false);
   const [pendingInput, setPendingInput] = useState<RecurringEntryInput | null>(null);
 
+  // Lista platnosci jedzie z serwera dopiero, gdy zwrot jest zaznaczony — i tylko raz na otwarcie.
+  useEffect(() => {
+    if (!isRefund || refundTargets) return;
+    let alive = true;
+    listRefundTargets(householdId, walletId, editing?.refundOfId ?? null).then((result) => {
+      if (alive) setRefundTargets(result.targets);
+    });
+    return () => {
+      alive = false;
+    };
+  }, [isRefund, refundTargets, householdId, walletId, editing?.refundOfId]);
+
   const filteredCategories = categories.filter((c) => c.kind === kind);
   const isEditingRecurring = !!editing?.recurringRuleId;
   const categoryOptions = filteredCategories.map((c) => ({
@@ -180,6 +198,40 @@ function TransactionFormFields({
     label: categoryDisplayName(c.name, locale, c.name_en),
     emoji: c.emoji,
   }));
+
+  const categoryById = new Map(categories.map((c) => [c.id, c]));
+  const refundTargetOptions = (refundTargets ?? []).map((target) => ({
+    id: target.id,
+    label: target.splitLabel ? `${target.title} — ${target.splitLabel}` : target.title,
+    emoji: categoryById.get(target.categoryId)?.emoji ?? "",
+    hint: `${money(target.amountCents, locale)} · ${shortDate(target.date, locale)}`,
+  }));
+  const refundCategory = categoryById.get(categoryId);
+  // Zwrot zawsze wchodzi do kategorii zwracanej platnosci — zeby roznica zostala w jednym miejscu.
+  const refundTargetMissing =
+    isRefund && !!refundOfId && !!refundTargets && !refundTargets.some((x) => x.id === refundOfId);
+
+  function pickRefundTarget(id: string) {
+    setRefundOfId(id);
+    const target = refundTargets?.find((x) => x.id === id);
+    if (target) setCategoryId(target.categoryId);
+  }
+
+  /** Zwrot jest przychodem w kategorii wydatku, wiec przelaczenie na wydatek go odwoluje. */
+  function pickKind(next: "expense" | "income") {
+    setKind(next);
+    if (next === "expense" && isRefund) toggleRefund(false);
+  }
+
+  function toggleRefund(next: boolean) {
+    setIsRefund(next);
+    // Zwrot to zawsze pieniadze wracajace, wiec zaznaczenie przestawia tez rodzaj — inaczej
+    // checkbox bylby widoczny dopiero po recznym przelaczeniu na przychod.
+    if (next) setKind("income");
+    // Kategoria zwrotu nalezy do platnosci, wiec po obu stronach przelacznika trzeba wybrac ja od nowa.
+    setCategoryId("");
+    setRefundOfId(null);
+  }
 
   // Suma czesci musi trafic w kwote platnosci — inaczej wpis nie zgodzi sie z wyciagiem.
   const partsTotal = parts.reduce((sum, p) => sum + (parseAmountToCents(p.amount) ?? 0), 0);
@@ -218,6 +270,10 @@ function TransactionFormFields({
   function submit(e: React.FormEvent) {
     e.preventDefault();
     const amountCents = parseAmountToCents(amount);
+    if (isRefund && !refundOfId) {
+      setError(t.refundNoTarget);
+      return;
+    }
     if (!amountCents || (!isSplit && !categoryId)) {
       setError(t.pickCatAmount);
       return;
@@ -249,20 +305,16 @@ function TransactionFormFields({
           label: part.label.trim() || null,
         })),
       };
-      startTransition(async () => {
+      run(
         // Kolejnosc ma znaczenie: edytowana pozycja musi zostac przerobiona, a nie zdublowana.
-        const result = editing?.splitGroupId
-          ? await updateSplitTransaction(editing.splitGroupId, splitInput)
-          : editing
-            ? await convertToSplit(editing.id, splitInput)
-            : await createSplitTransaction(householdId, walletId, splitInput);
-        if (result.error) {
-          setError(result.error);
-          return;
-        }
-        onOpenChange(false);
-        router.refresh();
-      });
+        () =>
+          editing?.splitGroupId
+            ? updateSplitTransaction(editing.splitGroupId, splitInput)
+            : editing
+              ? convertToSplit(editing.id, splitInput)
+              : createSplitTransaction(householdId, walletId, splitInput),
+        { onSuccess: () => onOpenChange(false) }
+      );
       return;
     }
 
@@ -284,64 +336,66 @@ function TransactionFormFields({
       return;
     }
 
-    startTransition(async () => {
-      let result: { error: string | null };
-      if (editing) {
-        const fields = {
-          kind,
-          title,
-          amountCents,
-          categoryId,
-          date,
-          isPaid,
-          paymentUrl: normalizedPaymentUrl,
-          graceDays: normalizedGraceDays,
-          note: normalizedNote,
-          isAutomatic,
-        };
-        if (editing.splitGroupId) {
-          // Wylaczony podzial: zostaje jedna pozycja, nadmiarowe czesci znikaja.
-          result = await mergeSplitToSingle(editing.splitGroupId, fields);
-        } else if (p) {
-          result = await convertToRecurring(editing.id, householdId, walletId, { ...fields, pattern: p });
+    run(
+      async () => {
+        let result: { error: string | null };
+        if (editing) {
+          const fields = {
+            kind,
+            title,
+            amountCents,
+            categoryId,
+            date,
+            isPaid,
+            paymentUrl: normalizedPaymentUrl,
+            graceDays: normalizedGraceDays,
+            note: normalizedNote,
+            isAutomatic,
+            isRefund,
+            refundOfId,
+          };
+          if (editing.splitGroupId) {
+            // Wylaczony podzial: zostaje jedna pozycja, nadmiarowe czesci znikaja.
+            result = await mergeSplitToSingle(editing.splitGroupId, fields);
+          } else if (p) {
+            result = await convertToRecurring(editing.id, householdId, walletId, { ...fields, pattern: p });
+          } else {
+            result = await updateTransaction(editing.id, fields);
+          }
         } else {
-          result = await updateTransaction(editing.id, fields);
+          result = p
+            ? await createRecurringEntry(householdId, walletId, {
+                kind,
+                title,
+                amountCents,
+                categoryId,
+                date,
+                isPaid,
+                paymentUrl: normalizedPaymentUrl,
+                graceDays: normalizedGraceDays,
+                note: normalizedNote,
+                isAutomatic,
+                pattern: p,
+              })
+            : await createTransaction(householdId, walletId, {
+                kind,
+                title,
+                amountCents,
+                categoryId,
+                date,
+                isPaid,
+                paymentUrl: normalizedPaymentUrl,
+                graceDays: normalizedGraceDays,
+                note: normalizedNote,
+                isAutomatic,
+                isRefund,
+                refundOfId,
+              });
         }
-      } else {
-        result = p
-          ? await createRecurringEntry(householdId, walletId, {
-              kind,
-              title,
-              amountCents,
-              categoryId,
-              date,
-              isPaid,
-              paymentUrl: normalizedPaymentUrl,
-              graceDays: normalizedGraceDays,
-              note: normalizedNote,
-              isAutomatic,
-              pattern: p,
-            })
-          : await createTransaction(householdId, walletId, {
-              kind,
-              title,
-              amountCents,
-              categoryId,
-              date,
-              isPaid,
-              paymentUrl: normalizedPaymentUrl,
-              graceDays: normalizedGraceDays,
-              note: normalizedNote,
-              isAutomatic,
-            });
-      }
-      if (result.error) {
-        setError(result.error);
-        return;
-      }
-      onOpenChange(false);
-      router.refresh();
-    });
+        return result;
+      },
+      { onSuccess: () => onOpenChange(false) }
+    );
   }
 
   function currentRuleAsPattern(): RecurrencePattern {
@@ -356,14 +410,8 @@ function TransactionFormFields({
   function pickScope(scope: Scope) {
     if (!editing || !pendingInput) return;
     setScopeOpen(false);
-    startTransition(async () => {
-      const result = await updateRecurringEntry(editing.id, scope, pendingInput);
-      if (result.error) {
-        setError(result.error);
-        return;
-      }
-      onOpenChange(false);
-      router.refresh();
+    run(() => updateRecurringEntry(editing.id, scope, pendingInput), {
+      onSuccess: () => onOpenChange(false),
     });
   }
 
@@ -378,7 +426,7 @@ function TransactionFormFields({
         <div className="flex items-center justify-center gap-3">
           <button
             type="button"
-            onClick={() => setKind("expense")}
+            onClick={() => pickKind("expense")}
             className="rounded-full p-2"
             style={kind === "expense" ? { background: "var(--neatly-danger-soft)", color: "var(--destructive)" } : { color: "var(--muted-foreground)" }}
             aria-label={t.expense}
@@ -395,7 +443,7 @@ function TransactionFormFields({
           />
           <button
             type="button"
-            onClick={() => setKind("income")}
+            onClick={() => pickKind("income")}
             className="rounded-full p-2"
             style={kind === "income" ? { background: "var(--neatly-primary-soft)", color: "var(--neatly-primary-dark)" } : { color: "var(--muted-foreground)" }}
             aria-label={t.incomeOne}
@@ -414,8 +462,17 @@ function TransactionFormFields({
         </div>
 
         <div>
-          <label className="mb-1.5 block text-base font-medium">{t.category}</label>
-          {isSplit ? (
+          <label className="mb-1.5 block text-base font-medium">{isRefund ? t.refundPick : t.category}</label>
+          {isRefund ? (
+            <RefundPicker
+              targets={refundTargets}
+              options={refundTargetOptions}
+              value={refundOfId}
+              onPick={pickRefundTarget}
+              category={refundCategory ? `${refundCategory.emoji} ${categoryDisplayName(refundCategory.name, locale, refundCategory.name_en)}` : null}
+              missing={refundTargetMissing}
+            />
+          ) : isSplit ? (
             <div className="flex flex-col gap-2">
               {parts.map((part, i) => (
                 <div key={part.key} className="flex items-start gap-2">
@@ -479,7 +536,7 @@ function TransactionFormFields({
             <CategoryCombobox fullscreenOnMobile options={categoryOptions} value={categoryId} onChange={setCategoryId} />
           )}
 
-          {!isEditingRecurring && repeat === "never" && (
+          {!isEditingRecurring && repeat === "never" && !isRefund && (
             <label className="mt-2 flex min-h-11 items-center gap-2 text-sm sm:min-h-0">
               <input
                 type="checkbox"
@@ -489,6 +546,23 @@ function TransactionFormFields({
               />
               {t.splitToggle}
             </label>
+          )}
+
+          {/* Zwrot to przychod doklejony do wydatku — zaznaczenie samo przestawia rodzaj na przychod. */}
+          {!isEditingRecurring && repeat === "never" && !isSplit && (
+            <div className="mt-2">
+              <label className="flex min-h-11 items-center gap-2 text-sm sm:min-h-0">
+                <input
+                  type="checkbox"
+                  checked={isRefund}
+                  onChange={(e) => toggleRefund(e.target.checked)}
+                  className="h-4 w-4 rounded-[6px]"
+                />
+                <Undo2 className="h-4 w-4 text-muted-foreground" />
+                {t.refundToggle}
+              </label>
+              {isRefund && <p className="mt-1 text-sm text-muted-foreground">{t.refundHint}</p>}
+            </div>
           )}
         </div>
 
@@ -506,7 +580,7 @@ function TransactionFormFields({
           <label className="mb-1.5 block text-base font-medium">{t.repeat}</label>
           <select
             value={repeat}
-            disabled={isSplit}
+            disabled={isSplit || isRefund}
             onChange={(e) => setRepeat(e.target.value as RepeatPreset)}
             className="w-full rounded-[10px] border border-border bg-muted px-3 py-2 text-base disabled:opacity-60"
           >
@@ -520,6 +594,7 @@ function TransactionFormFields({
             <option value="custom">{t.custom}</option>
           </select>
           {isSplit && <p className="mt-1 text-sm text-muted-foreground">{t.splitNoRepeat}</p>}
+          {isRefund && <p className="mt-1 text-sm text-muted-foreground">{t.refundNoRepeat}</p>}
         </div>
 
         {repeat === "weekdays" && (
@@ -674,14 +749,63 @@ function TransactionFormFields({
         <button
           type="submit"
           disabled={pending}
-          className="rounded-[10px] px-4 py-2.5 text-base font-medium text-primary-foreground disabled:opacity-50"
+          className="flex items-center justify-center gap-2 rounded-[10px] px-4 py-2.5 text-base font-medium text-primary-foreground disabled:opacity-50"
           style={{ background: "var(--primary)" }}
         >
+          {pending && <Spinner />}
           {t.save}
         </button>
       </form>
 
       <ScopeDialog open={scopeOpen} onOpenChange={setScopeOpen} title={t.scopeEditTitle} onPick={pickScope} />
     </>
+  );
+}
+
+/**
+ * Wybor zwracanej platnosci. Kategoria nie jest tu do wyboru — bierze sie z platnosci,
+ * inaczej zwrot wyladowalby w innej kategorii niz wydatek, ktory ma pomniejszyc.
+ */
+function RefundPicker({
+  targets,
+  options,
+  value,
+  onPick,
+  category,
+  missing,
+}: {
+  targets: RefundTarget[] | null;
+  options: { id: string; label: string; emoji: string; hint: string }[];
+  value: string | null;
+  onPick: (id: string) => void;
+  category: string | null;
+  missing: boolean;
+}) {
+  const { t } = useLocale();
+
+  if (!targets) return <p className="text-sm text-muted-foreground">{t.loading}</p>;
+  if (targets.length === 0) return <p className="text-sm text-muted-foreground">{t.refundNoTargets}</p>;
+
+  return (
+    <div className="flex flex-col gap-1.5">
+      <CategoryCombobox
+        fullscreenOnMobile
+        options={options}
+        value={missing ? "" : (value ?? "")}
+        onChange={onPick}
+        placeholder={t.refundPickPlaceholder}
+        title={t.refundPickTitle}
+        searchPlaceholder={t.refundSearchPayment}
+      />
+      {missing ? (
+        <p className="text-sm" style={{ color: "var(--destructive)" }}>{t.refundOrphan}</p>
+      ) : category ? (
+        <p className="text-sm text-muted-foreground">
+          {t.category}: {category}
+        </p>
+      ) : (
+        <p className="text-sm text-muted-foreground">{t.refundCategoryFrom}</p>
+      )}
+    </div>
   );
 }

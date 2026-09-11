@@ -4,17 +4,18 @@ import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { ArrowLeft, Check, ChevronsUpDown } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useLocale } from "@/components/locale-provider";
+import { foldText as fold } from "@/lib/format";
 import { useMediaQuery } from "@/lib/use-media-query";
 import { useKeyboardInset } from "@/lib/use-keyboard-inset";
 
-export type ComboboxOption = { id: string; label: string; emoji: string; color?: string };
-
-/** "spozywcze" ma trafiac w "spożywcze" — bez tego szukanie po polsku wymaga ogonkow. */
-const fold = (s: string) =>
-  s
-    .normalize("NFD")
-    .replace(/\p{Diacritic}/gu, "")
-    .toLowerCase();
+export type ComboboxOption = {
+  id: string;
+  label: string;
+  emoji: string;
+  color?: string;
+  /** Drugi plan pozycji — przy platnosciach kwota i data, zeby odroznic te o tym samym tytule. */
+  hint?: string;
+};
 
 export function CategoryCombobox({
   options,
@@ -24,6 +25,8 @@ export function CategoryCombobox({
   variant = "field",
   disabled = false,
   fullscreenOnMobile = false,
+  title,
+  searchPlaceholder,
 }: {
   options: ComboboxOption[];
   value: string;
@@ -33,6 +36,9 @@ export function CategoryCombobox({
   disabled?: boolean;
   /** Na telefonie zamiast dropdownu (chowal sie pod paskiem adresu) pelnoekranowa lista. */
   fullscreenOnMobile?: boolean;
+  /** Naglowek i placeholder szukajki — domyslnie kategorie, bo stad wziela sie ta lista. */
+  title?: string;
+  searchPlaceholder?: string;
 }) {
   const { t } = useLocale();
   const listId = useId();
@@ -111,6 +117,7 @@ export function CategoryCombobox({
         <>
           <span aria-hidden>{selected.emoji}</span>
           <span className="min-w-0 flex-1 truncate">{selected.label}</span>
+          {selected.hint && <span className="tabular shrink-0 text-sm text-muted-foreground">{selected.hint}</span>}
         </>
       ) : (
         <span className="min-w-0 flex-1 truncate text-muted-foreground">{placeholder ?? t.category}</span>
@@ -141,7 +148,7 @@ export function CategoryCombobox({
             ref={screenRef}
             role="dialog"
             aria-modal="true"
-            aria-label={t.chooseCategory}
+            aria-label={title ?? t.chooseCategory}
             tabIndex={-1}
             onKeyDown={(e) => {
               if (e.key === "Escape") {
@@ -164,7 +171,7 @@ export function CategoryCombobox({
               >
                 <ArrowLeft className="h-5 w-5" />
               </button>
-              <span className="text-lg font-medium">{t.chooseCategory}</span>
+              <span className="text-lg font-medium">{title ?? t.chooseCategory}</span>
             </div>
 
             <input
@@ -174,7 +181,7 @@ export function CategoryCombobox({
                 setQuery(e.target.value);
                 setActiveIndex(0);
               }}
-              placeholder={t.searchCategory}
+              placeholder={searchPlaceholder ?? t.searchCategory}
               className="shrink-0 border-b border-border bg-transparent px-4 py-3 text-base outline-none"
             />
 
@@ -208,7 +215,7 @@ export function CategoryCombobox({
             setActiveIndex(0);
           }}
           onKeyDown={onKeyDown}
-          placeholder={t.searchCategory}
+          placeholder={searchPlaceholder ?? t.searchCategory}
           className="w-full border-b border-border bg-transparent px-3 py-2.5 text-base outline-none"
         />
         <div className="max-h-64 overflow-y-auto p-1">{list}</div>
@@ -253,6 +260,7 @@ function OptionList({
           >
             <span aria-hidden>{option.emoji}</span>
             <span className="min-w-0 flex-1 truncate">{option.label}</span>
+            {option.hint && <span className="tabular shrink-0 text-sm text-muted-foreground">{option.hint}</span>}
             {option.id === value && <Check className="h-4 w-4 shrink-0" style={{ color: "var(--primary)" }} />}
           </button>
         </li>

@@ -200,3 +200,21 @@
     }
   }
 }
+
+/* Pasek postepu u gory: wraca od lewej do prawej, dopoki jakas akcja czeka na odpowiedz. */
+@keyframes neatly-slide {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(350%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [style*="neatly-slide"] {
+    animation: none !important;
+    width: 100% !important;
+    opacity: 0.5;
+  }
+}

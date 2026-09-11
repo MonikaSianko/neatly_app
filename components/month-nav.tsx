@@ -1,10 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useTransition } from "react";
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { type YearMonth, monthKey, monthLabel, shiftMonth } from "@/lib/month";
 import { useLocale } from "@/components/locale-provider";
+import { usePendingSignal } from "@/components/pending-provider";
 
 const INTL_LOCALE = { pl: "pl-PL", en: "en-GB" } as const;
 
@@ -15,11 +16,14 @@ export function MonthNav({ ym }: { ym: YearMonth }) {
   const { locale } = useLocale();
   const [open, setOpen] = useState(false);
   const [pickerYear, setPickerYear] = useState(ym.y);
+  // Zmiana miesiaca to zapytanie do serwera — pasek u gory mowi o niej tak samo jak o zapisie.
+  const [pending, startTransition] = useTransition();
+  usePendingSignal(pending);
 
   function go(next: YearMonth) {
     const params = new URLSearchParams(searchParams.toString());
     params.set("month", monthKey(next));
-    router.push(`${pathname}?${params.toString()}`);
+    startTransition(() => router.push(`${pathname}?${params.toString()}`));
   }
 
   const monthShort = (i: number) =>
@@ -41,7 +45,8 @@ export function MonthNav({ ym }: { ym: YearMonth }) {
           setPickerYear(ym.y);
           setOpen(!open);
         }}
-        className="min-h-11 min-w-28 rounded-[10px] px-2 text-center text-base font-medium capitalize hover:bg-muted sm:min-h-9"
+        className="min-h-11 min-w-28 rounded-[10px] px-2 text-center text-base font-medium capitalize transition-opacity hover:bg-muted sm:min-h-9"
+        style={{ opacity: pending ? 0.5 : 1 }}
       >
         {monthLabel(ym, locale)}
       </button>

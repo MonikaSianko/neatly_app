@@ -19,6 +19,8 @@ import {
 import { EmojiPicker } from "@/components/emoji-picker";
 import { createWallet, updateWallet } from "@/lib/actions/wallets";
 import { useLocale } from "@/components/locale-provider";
+import { Spinner } from "@/components/ui/spinner";
+import { usePendingSignal } from "@/components/pending-provider";
 
 type Wallet = { id: string; name: string; emoji: string | null };
 
@@ -47,6 +49,7 @@ export function WalletSwitcher({
   // useOptimistic sam wraca do wartosci z URL, wiec przycisk "wstecz" nie zostawia stalej nazwy.
   const [optimisticWalletId, setOptimisticWalletId] = useOptimistic(activeWalletId);
   const active = wallets.find((w) => w.id === optimisticWalletId);
+  usePendingSignal(pending || navPending);
 
   function select(id: string) {
     const params = new URLSearchParams(searchParams.toString());
@@ -106,7 +109,7 @@ export function WalletSwitcher({
             className="flex min-h-9 shrink-0 items-center gap-1 rounded-[10px] border border-border bg-card px-2.5 text-base font-medium transition-opacity sm:min-h-8 sm:px-3"
             style={{ opacity: navPending ? 0.6 : 1 }}
           >
-            <span aria-hidden>{active?.emoji}</span>
+            {navPending ? <Spinner className="h-4 w-4" /> : <span aria-hidden>{active?.emoji}</span>}
             <span className="hidden max-w-36 truncate sm:inline">{active?.name}</span>
             <ChevronDown className="h-4 w-4 text-muted-foreground" />
           </button>
@@ -163,9 +166,10 @@ export function WalletSwitcher({
             <button
               type="submit"
               disabled={pending}
-              className="rounded-[10px] px-4 py-2.5 text-base font-medium text-primary-foreground disabled:opacity-50"
+              className="flex items-center justify-center gap-2 rounded-[10px] px-4 py-2.5 text-base font-medium text-primary-foreground disabled:opacity-50"
               style={{ background: "var(--primary)" }}
             >
+              {pending && <Spinner />}
               {editingId === "new" ? t.createWallet : t.save}
             </button>
           </form>

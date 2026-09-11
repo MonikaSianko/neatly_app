@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState } from "react";
 import { ArrowUp, ArrowDown, Pencil, Trash2, Archive, RotateCcw, Plus } from "lucide-react";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { EmojiPicker } from "@/components/emoji-picker";
@@ -13,6 +13,8 @@ import {
   type CategoryKind,
 } from "@/lib/actions/categories";
 import { useLocale } from "@/components/locale-provider";
+import { Spinner } from "@/components/ui/spinner";
+import { useAction } from "@/lib/use-action";
 import { categoryDisplayName } from "@/lib/i18n";
 
 const PALETTE = [
@@ -55,8 +57,8 @@ export function CategoryManager({
   const [kind, setKind] = useState<CategoryKind>("expense");
   const [edit, setEdit] = useState<Draft | null>(null);
   const [showArchived, setShowArchived] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [pending, startTransition] = useTransition();
+  // Akcje kategorii same odswiezaja widok przez revalidatePath, wiec nie dokladamy drugiego odswiezenia.
+  const { pending, busy, error, run } = useAction();
 
   const list = categories
     .filter((c) => c.kind === kind && !c.is_archived)
@@ -64,40 +66,27 @@ export function CategoryManager({
   const archived = categories.filter((c) => c.kind === kind && c.is_archived);
 
   function move(id: string, direction: -1 | 1) {
-    startTransition(async () => {
-      const result = await reorderCategory(householdId, kind, id, direction);
-      if (result.error) setError(result.error);
-    });
+    run(() => reorderCategory(householdId, kind, id, direction), { key: id, refresh: false });
   }
 
   function remove(id: string) {
-    startTransition(async () => {
-      const result = await deleteOrArchiveCategory(id);
-      if (result.error) setError(result.error);
-    });
+    run(() => deleteOrArchiveCategory(id), { key: id, refresh: false });
   }
 
   function restore(id: string) {
-    startTransition(async () => {
-      const result = await restoreCategory(id);
-      if (result.error) setError(result.error);
-    });
+    run(() => restoreCategory(id), { key: id, refresh: false });
   }
 
   function submitEdit(e: React.FormEvent) {
     e.preventDefault();
     if (!edit) return;
-    startTransition(async () => {
-      const result = edit.id
-        ? await updateCategory(edit.id, { name: edit.name, emoji: edit.emoji, color: edit.color }, locale)
-        : await createCategory(householdId, list.length, { ...edit, kind });
-      if (result.error) {
-        setError(result.error);
-        return;
-      }
-      setError(null);
-      setEdit(null);
-    });
+    run(
+      () =>
+        edit.id
+          ? updateCategory(edit.id, { name: edit.name, emoji: edit.emoji, color: edit.color }, locale)
+          : createCategory(householdId, list.length, { ...edit, kind }),
+      { key: "form", refresh: false, onSuccess: () => setEdit(null) }
+    );
   }
 
   return (
@@ -176,10 +165,10 @@ export function CategoryManager({
                   type="button"
                   onClick={() => remove(c.id)}
                   disabled={pending}
-                  className="p-1"
+                  className="p-1 disabled:opacity-50"
                   style={{ color: "var(--destructive)" }}
                 >
-                  <Trash2 className="h-3.5 w-3.5" />
+                  {busy(c.id) ? <Spinner className="h-3.5 w-3.5" /> : <Trash2 className="h-3.5 w-3.5" />}
                 </button>
               </div>
             ))}
@@ -217,10 +206,11 @@ export function CategoryManager({
                         type="button"
                         onClick={() => restore(c.id)}
                         disabled={pending}
-                        className="flex items-center gap-1 p-1 text-sm"
+                        className="flex items-center gap-1 p-1 text-sm disabled:opacity-50"
                         style={{ color: "var(--neatly-primary-dark)" }}
                       >
-                        <RotateCcw className="h-3.5 w-3.5" /> {t.restore}
+                        {busy(c.id) ? <Spinner className="h-3.5 w-3.5" /> : <RotateCcw className="h-3.5 w-3.5" />}
+                        {t.restore}
                       </button>
                     </div>
                   ))}
@@ -274,9 +264,10 @@ export function CategoryManager({
                 <button
                   type="submit"
                   disabled={pending}
-                  className="flex-1 rounded-[10px] px-4 py-2 text-base font-medium text-primary-foreground disabled:opacity-50"
+                  className="flex flex-1 items-center justify-center gap-2 rounded-[10px] px-4 py-2 text-base font-medium text-primary-foreground disabled:opacity-50"
                   style={{ background: "var(--primary)" }}
                 >
+                  {busy("form") && <Spinner />}
                   {t.saveCategory}
                 </button>
                 <button

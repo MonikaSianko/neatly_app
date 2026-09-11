@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
 import {
   ChevronDown,
   MoreVertical,
@@ -9,6 +8,7 @@ import {
   Trash2,
   ExternalLink,
   Repeat,
+  Undo2,
   Zap,
   Split,
 } from "lucide-react";
@@ -33,10 +33,13 @@ import { deleteRecurringEntry } from "@/lib/actions/recurring";
 import { createClient } from "@/lib/supabase/client";
 import { money, shortDate, payNowStyle } from "@/lib/format";
 import { useLocale } from "@/components/locale-provider";
+import { Spinner } from "@/components/ui/spinner";
+import { useAction } from "@/lib/use-action";
 import { categoryDisplayName } from "@/lib/i18n";
 
 export type TxRow = {
   id: string;
+  kind: "expense" | "income";
   title: string;
   amount_cents: number;
   date: string;
@@ -49,6 +52,9 @@ export type TxRow = {
   is_automatic: boolean;
   split_group_id: string | null;
   split_label: string | null;
+  /** Zwrot pokazuje sie w kategorii wydatku, ktory pomniejsza — ze znakiem minus. */
+  is_refund: boolean;
+  refund_of_id: string | null;
 };
 
 export type TxGroup = {
@@ -61,7 +67,7 @@ type Category = { id: string; name: string; name_en: string | null; emoji: strin
 
 export function TransactionGroupList({
   groups,
-  kind,
+  refundParents,
   householdId,
   walletId,
   categories,
@@ -71,7 +77,8 @@ export function TransactionGroupList({
   defaultDate,
 }: {
   groups: TxGroup[];
-  kind: "expense" | "income";
+  /** Tytuly zwracanych platnosci po id — zwrot sam z siebie nie mowi, czego dotyczy. */
+  refundParents: Record<string, string>;
   householdId: string;
   walletId: string;
   categories: Category[];
@@ -80,12 +87,12 @@ export function TransactionGroupList({
   today: string;
   defaultDate: string;
 }) {
-  const router = useRouter();
   const { locale, t } = useLocale();
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [overrides, setOverrides] = useState<Record<string, boolean>>({});
   const [editing, setEditing] = useState<EditingTransaction | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<TxRow | null>(null);
+  const { busy, error, run } = useAction();
 
   function toggleGroup(id: string) {
     setExpanded((prev) => {
@@ -96,37 +103,40 @@ export function TransactionGroupList({
     });
   }
 
-  async function togglePaid(row: TxRow) {
+  function togglePaid(row: TxRow) {
     const next = !(overrides[row.id] ?? row.is_paid);
     setOverrides((prev) => ({ ...prev, [row.id]: next }));
 
-    // Czesci jednej platnosci schodza z konta razem, wiec odhaczamy cala grupe.
-    const failed = row.split_group_id
-      ? (await setSplitPaid(row.split_group_id, next)).error
-      : await (async () => {
-          const supabase = createClient();
-          const { error } = await supabase
-            .from("transactions")
-            .update({ is_paid: next, paid_at: next ? new Date().toISOString() : null })
-            .eq("id", row.id);
-          return error?.message ?? null;
-        })();
+    run(
+      async () => {
+        // Czesci jednej platnosci schodza z konta razem, wiec odhaczamy cala grupe.
+        const failed = row.split_group_id
+          ? (await setSplitPaid(row.split_group_id, next)).error
+          : await (async () => {
+              const supabase = createClient();
+              const { error: dbError } = await supabase
+                .from("transactions")
+                .update({ is_paid: next, paid_at: next ? new Date().toISOString() : null })
+                .eq("id", row.id);
+              return dbError?.message ?? null;
+            })();
 
-    if (failed) {
-      setOverrides((prev) => ({ ...prev, [row.id]: row.is_paid }));
-      return;
-    }
-    router.refresh();
+        // Odhaczenie zmienia wiersz od razu, wiec nieudany zapis trzeba cofnac na ekranie.
+        if (failed) setOverrides((prev) => ({ ...prev, [row.id]: row.is_paid }));
+        return { error: failed };
+      },
+      { key: row.id }
+    );
   }
 
   function requestDelete(row: TxRow) {
     if (row.split_group_id) {
       // Pojedyncza czesc bez reszty nie zgadzalaby sie z wyciagiem — znika cala platnosc.
-      deleteSplitTransaction(row.split_group_id).then(() => router.refresh());
+      run(() => deleteSplitTransaction(row.split_group_id!), { key: row.id });
     } else if (row.recurring_rule_id) {
       setDeleteTarget(row);
     } else {
-      deleteTransaction(row.id).then(() => router.refresh());
+      run(() => deleteTransaction(row.id), { key: row.id });
     }
   }
 
@@ -135,7 +145,8 @@ export function TransactionGroupList({
     const split = row.split_group_id ? splitGroups[row.split_group_id] : null;
     setEditing({
       id: row.id,
-      kind,
+      // Zwrot lezy w grupie wydatkow, ale sam jest przychodem — formularz musi dostac jego wlasny rodzaj.
+      kind: row.kind,
       title: row.title,
       amountCents: split ? split.total : row.amount_cents,
       categoryId: row.category_id,
@@ -149,14 +160,31 @@ export function TransactionGroupList({
       rule: row.recurring_rule_id ? rules[row.recurring_rule_id] ?? null : null,
       splitGroupId: row.split_group_id,
       splitParts: split?.parts,
+      isRefund: row.is_refund,
+      refundOfId: row.refund_of_id,
     });
+  }
+
+  /**
+   * Tytul zwrotu z nazwa zwracanej platnosci z przodu. Doklejana czesc ma kolor marki,
+   * zeby bylo widac, ze to nie jest czesc wpisanej nazwy.
+   */
+  function rowTitle(row: TxRow) {
+    const parent = row.is_refund && row.refund_of_id ? refundParents[row.refund_of_id] : null;
+    return (
+      <>
+        {parent && <span style={{ color: "var(--neatly-primary-dark)" }}>{parent} — </span>}
+        {row.title}
+        {row.split_label && <span className="text-muted-foreground"> — {row.split_label}</span>}
+      </>
+    );
   }
 
   function pickDeleteScope(scope: Scope) {
     if (!deleteTarget) return;
     const id = deleteTarget.id;
     setDeleteTarget(null);
-    deleteRecurringEntry(id, scope).then(() => router.refresh());
+    run(() => deleteRecurringEntry(id, scope), { key: id });
   }
 
   if (groups.length === 0) {
@@ -196,27 +224,37 @@ export function TransactionGroupList({
                   {group.items.map((row, i) => {
                     const paid = overrides[row.id] ?? row.is_paid;
                     const overdue = !paid && row.date < today;
+                    // Wiersz czekajacy na baze przygasa i nie przyjmuje kolejnych klikniec.
+                    const waiting = busy(row.id);
                     return (
                       <div
                         key={row.id}
                         className={`flex items-center gap-2 px-4 py-2 ${i > 0 ? "border-t border-border" : ""}`}
+                        style={waiting ? { opacity: 0.55, pointerEvents: "none" } : undefined}
+                        aria-busy={waiting || undefined}
                       >
                         <label className="tap-target flex h-6 w-6 shrink-0 items-center justify-center">
-                          <input
-                            type="checkbox"
-                            checked={paid}
-                            onChange={() => togglePaid(row)}
-                            className="h-4 w-4 rounded-[6px]"
-                            aria-label={kind === "income" ? t.received : t.paid}
-                          />
+                          {waiting ? (
+                            <Spinner className="h-4 w-4 text-muted-foreground" />
+                          ) : (
+                            <input
+                              type="checkbox"
+                              checked={paid}
+                              onChange={() => togglePaid(row)}
+                              className="h-4 w-4 rounded-[6px]"
+                              aria-label={row.kind === "income" ? t.received : t.paid}
+                            />
+                          )}
                         </label>
                         <span className="flex min-w-0 flex-1 items-center gap-1.5 text-base">
-                          <span className="truncate">
-                            {row.title}
-                            {row.split_label && (
-                              <span className="text-muted-foreground"> — {row.split_label}</span>
-                            )}
-                          </span>
+                          <span className="truncate">{rowTitle(row)}</span>
+                          {row.is_refund && (
+                            <Undo2
+                              className="h-3.5 w-3.5 shrink-0"
+                              style={{ color: "var(--neatly-primary-dark)" }}
+                              aria-label={t.refundOne}
+                            />
+                          )}
                           {row.split_group_id && (
                             <Split
                               className="h-3.5 w-3.5 shrink-0 text-muted-foreground"
@@ -252,7 +290,12 @@ export function TransactionGroupList({
                             <span className="hidden sm:inline">{t.payNow}</span>
                           </a>
                         )}
-                        <span className="tabular text-base font-medium">{money(row.amount_cents, locale)}</span>
+                        <span
+                          className="tabular text-base font-medium"
+                          style={row.is_refund ? { color: "var(--neatly-primary-dark)" } : undefined}
+                        >
+                          {money(row.is_refund ? -row.amount_cents : row.amount_cents, locale)}
+                        </span>
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
                             <button
@@ -281,6 +324,8 @@ export function TransactionGroupList({
           );
         })}
       </div>
+
+      {error && <p className="mt-2 text-sm" style={{ color: "var(--destructive)" }}>{error}</p>}
 
       <TransactionForm
         open={!!editing}

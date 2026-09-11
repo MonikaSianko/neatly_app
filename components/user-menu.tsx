@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Check, Home, Languages, LogOut, Tags, UserRound } from "lucide-react";
 import {
@@ -20,6 +20,8 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/co
 import { CategoryManager, type Category } from "@/components/category-manager";
 import { createClient } from "@/lib/supabase/client";
 import { useLocale } from "@/components/locale-provider";
+import { Spinner } from "@/components/ui/spinner";
+import { usePendingSignal } from "@/components/pending-provider";
 import { useMediaQuery } from "@/lib/use-media-query";
 import type { Locale } from "@/lib/i18n";
 
@@ -42,12 +44,17 @@ export function UserMenu({
   const [categoriesOpen, setCategoriesOpen] = useState(false);
   const [sheetOpen, setSheetOpen] = useState(false);
   const isMobile = useMediaQuery("(max-width: 639px)");
+  // Wylogowanie konczy sie przeniesieniem na /login, wiec przycisk musi pokazac, ze juz dziala.
+  const [loggingOut, startLogout] = useTransition();
+  usePendingSignal(loggingOut);
 
-  async function logout() {
-    const supabase = createClient();
-    await supabase.auth.signOut();
-    router.push("/login");
-    router.refresh();
+  function logout() {
+    startLogout(async () => {
+      const supabase = createClient();
+      await supabase.auth.signOut();
+      router.push("/login");
+      router.refresh();
+    });
   }
 
   const trigger = (
@@ -116,9 +123,14 @@ export function UserMenu({
                 <button
                   type="button"
                   onClick={logout}
-                  className="mt-1 flex min-h-12 items-center gap-3 rounded-[10px] border-t border-border px-3 text-left text-[17px] active:bg-muted"
+                  disabled={loggingOut}
+                  className="mt-1 flex min-h-12 items-center gap-3 rounded-[10px] border-t border-border px-3 text-left text-[17px] active:bg-muted disabled:opacity-50"
                 >
-                  <LogOut className="h-5 w-5 text-muted-foreground" />
+                  {loggingOut ? (
+                    <Spinner className="h-5 w-5 text-muted-foreground" />
+                  ) : (
+                    <LogOut className="h-5 w-5 text-muted-foreground" />
+                  )}
                   {t.logout}
                 </button>
               </nav>
@@ -159,8 +171,8 @@ export function UserMenu({
               </DropdownMenuSubContent>
             </DropdownMenuSub>
             <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={logout}>
-              <LogOut className="h-4 w-4" />
+            <DropdownMenuItem onClick={logout} disabled={loggingOut}>
+              {loggingOut ? <Spinner /> : <LogOut className="h-4 w-4" />}
               {t.logout}
             </DropdownMenuItem>
           </DropdownMenuContent>

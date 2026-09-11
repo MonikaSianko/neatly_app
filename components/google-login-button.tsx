@@ -1,21 +1,27 @@
 "use client";
 
+import { useTransition } from "react";
 import { useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { useLocale } from "@/components/locale-provider";
+import { Spinner } from "@/components/ui/spinner";
 
 export function GoogleLoginButton() {
   const { t } = useLocale();
   const searchParams = useSearchParams();
   const next = searchParams.get("next") ?? "/";
+  // Przekierowanie do Google potrafi chwile trwac — bez tego przycisk wyglada na martwy.
+  const [pending, startTransition] = useTransition();
 
-  async function signInWithGoogle() {
-    const supabase = createClient();
-    await supabase.auth.signInWithOAuth({
-      provider: "google",
-      options: {
-        redirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent(next)}`,
-      },
+  function signInWithGoogle() {
+    startTransition(async () => {
+      const supabase = createClient();
+      await supabase.auth.signInWithOAuth({
+        provider: "google",
+        options: {
+          redirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent(next)}`,
+        },
+      });
     });
   }
 
@@ -23,9 +29,11 @@ export function GoogleLoginButton() {
     <button
       type="button"
       onClick={signInWithGoogle}
-      className="flex items-center justify-center gap-2 rounded-[10px] px-4 py-2.5 text-base font-medium text-primary-foreground"
+      disabled={pending}
+      className="flex items-center justify-center gap-2 rounded-[10px] px-4 py-2.5 text-base font-medium text-primary-foreground disabled:opacity-60"
       style={{ background: "var(--primary)" }}
     >
+      {pending && <Spinner />}
       <svg viewBox="0 0 24 24" className="h-4 w-4" aria-hidden>
         <path
           fill="currentColor"

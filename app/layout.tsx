@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Noto_Sans_JP } from "next/font/google";
 import "./globals.css";
 import { LocaleProvider } from "@/components/locale-provider";
+import { PendingProvider } from "@/components/pending-provider";
 import { createClient } from "@/lib/supabase/server";
 import { resolveLocale } from "@/lib/locale";
 
@@ -38,7 +39,9 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html lang={locale} className={`${notoSansJP.variable} h-full antialiased`}>
       <body className="min-h-full flex flex-col font-sans">
-        <LocaleProvider initialLocale={locale}>{children}</LocaleProvider>
+        <PendingProvider>
+          <LocaleProvider initialLocale={locale}>{children}</LocaleProvider>
+        </PendingProvider>
       </body>
     </html>
   );

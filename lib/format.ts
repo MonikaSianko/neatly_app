@@ -4,6 +4,19 @@ import type { PaymentStatus } from "./month";
 
 const INTL_LOCALE: Record<Locale, string> = { pl: "pl-PL", en: "en-GB" };
 
+/** "spozywcze" ma trafiac w "spożywcze" — bez tego szukanie po polsku wymaga ogonkow. */
+export function foldText(value: string): string {
+  return value
+    .normalize("NFD")
+    .replace(/\p{Diacritic}/gu, "")
+    .toLowerCase();
+}
+
+/** Grosze -> "1 234,56" bez waluty — tak, jak kwote wpisuje sie w wyszukiwarce. */
+export function amountText(amountCents: number): string {
+  return (amountCents / 100).toFixed(2).replace(".", ",");
+}
+
 /** Grosze -> "1 234,56 zł" (wg locale, waluta zawsze PLN). */
 export function money(amountCents: number, locale: Locale = "pl"): string {
   return new Intl.NumberFormat(INTL_LOCALE[locale], {

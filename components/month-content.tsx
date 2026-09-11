@@ -58,7 +58,7 @@ export async function MonthContent({
     supabase
       .from("transactions")
       .select(
-        "id, kind, title, amount_cents, category_id, date, is_paid, created_at, recurring_rule_id, payment_url, grace_days, note, is_automatic, split_group_id, split_label"
+        "id, kind, title, amount_cents, category_id, date, is_paid, created_at, recurring_rule_id, payment_url, grace_days, note, is_automatic, split_group_id, split_label, is_refund, refund_of_id"
       )
       .eq("household_id", householdId)
       .eq("wallet_id", walletId)
@@ -95,7 +95,13 @@ export async function MonthContent({
   );
 
   const summary = computeSummary(
-    monthTx.map((t) => ({ kind: t.kind, amount_cents: t.amount_cents, is_paid: t.is_paid, category_id: t.category_id })),
+    monthTx.map((t) => ({
+      kind: t.kind,
+      amount_cents: t.amount_cents,
+      is_paid: t.is_paid,
+      category_id: t.category_id,
+      is_refund: t.is_refund,
+    })),
     monthBudgets.map((b) => ({ category_id: b.category_id, amount_cents: b.amount_cents })),
     openingCents
   );
@@ -108,10 +114,19 @@ export async function MonthContent({
   }));
 
   const categoryById = new Map(categories.map((c) => [c.id, c]));
+  /**
+   * Zwrot siedzi w kategorii wydatku, wiec pokazuje sie przy nim — w Wydatkach, nie w Przychodach,
+   * i to ze znakiem minus, zeby suma kategorii byla tym, co naprawde na nia poszlo.
+   */
+  const belongsTo = (x: { kind: string; is_refund: boolean }, kind: "expense" | "income") =>
+    kind === "expense" ? x.kind === "expense" || x.is_refund : x.kind === "income" && !x.is_refund;
+  const signedAmount = (x: { amount_cents: number; is_refund: boolean }) =>
+    x.is_refund ? -x.amount_cents : x.amount_cents;
+
   const groupsFor = (kind: "expense" | "income"): TxGroup[] => {
     const map = new Map<string, TxRow[]>();
     monthTx
-      .filter((x) => x.kind === kind)
+      .filter((x) => belongsTo(x, kind))
       .forEach((x) => {
         const list = map.get(x.category_id) ?? [];
         list.push(x);
@@ -125,7 +140,7 @@ export async function MonthContent({
             ? { id: cat.id, name: cat.name, name_en: cat.name_en, emoji: cat.emoji, color: cat.color }
             : null,
           items: items.sort((a, b) => a.date.localeCompare(b.date)),
-          sum: items.reduce((s, x) => s + x.amount_cents, 0),
+          sum: items.reduce((s, x) => s + signedAmount(x), 0),
         };
       })
       .sort(
@@ -134,6 +149,24 @@ export async function MonthContent({
           (categoryById.get(b.category?.id ?? "")?.position ?? 0)
       );
   };
+
+  /**
+   * Tytuly zwracanych platnosci, zeby zwrot mowil, czego dotyczy ("Ramenownia — Asia zwrot").
+   * Zwrot czesto przychodzi w innym miesiacu niz zakup, wiec brakujace tytuly dociagamy po id.
+   */
+  const refundParents: Record<string, string> = {};
+  const parentIds = [...new Set(monthTx.map((x) => x.refund_of_id).filter((id): id is string => !!id))];
+  if (parentIds.length > 0) {
+    const inMonth = new Map(monthTx.map((x) => [x.id, x.title]));
+    const missing = parentIds.filter((id) => !inMonth.has(id));
+    const { data: parents } = missing.length
+      ? await supabase.from("transactions").select("id, title").in("id", missing)
+      : { data: [] };
+    for (const id of parentIds) {
+      const title = inMonth.get(id) ?? parents?.find((x) => x.id === id)?.title;
+      if (title) refundParents[id] = title;
+    }
+  }
 
   const defaultDate = ym.y === Number(today.slice(0, 4)) && ym.m === Number(today.slice(5, 7)) ? today : range.from;
   const expenseCategories = categories.filter((c) => c.kind === "expense" && !c.is_archived);
@@ -183,6 +216,7 @@ export async function MonthContent({
             upcoming: (
               <UpcomingTable
                 rows={paymentRows}
+                refundParents={refundParents}
                 categories={categories}
                 householdId={householdId}
                 walletId={walletId}
@@ -194,7 +228,7 @@ export async function MonthContent({
             expense: (
               <TransactionGroupList
                 groups={groupsFor("expense")}
-                kind="expense"
+                refundParents={refundParents}
                 householdId={householdId}
                 walletId={walletId}
                 categories={categories}
@@ -207,7 +241,7 @@ export async function MonthContent({
             income: (
               <TransactionGroupList
                 groups={groupsFor("income")}
-                kind="income"
+                refundParents={refundParents}
                 householdId={householdId}
                 walletId={walletId}
                 categories={categories}

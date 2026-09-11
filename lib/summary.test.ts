@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { computeSummary, categoryContribution } from "./summary";
+import { computeSummary, categoryContribution, categorySpent } from "./summary";
 
 const groceries = "cat-groceries";
 const car = "cat-car";
@@ -102,5 +102,57 @@ describe("computeSummary", () => {
 
     // Stan konta widzi wylacznie to, co juz zaplacone.
     expect(summary.accountBalance).toBe(270000);
+  });
+});
+
+describe("zwroty", () => {
+  const eatingOut = "cat-eating-out";
+  // Ramenownia 234,00 zl i zwrot Asi 147,00 zl — przyklad z zycia.
+  const ramen = { kind: "expense" as const, amount_cents: 23400, is_paid: true, category_id: eatingOut };
+  const asia = {
+    kind: "income" as const,
+    amount_cents: 14700,
+    is_paid: true,
+    category_id: eatingOut,
+    is_refund: true,
+  };
+
+  it("odejmuje zwrot od wydatkow kategorii", () => {
+    expect(categorySpent([ramen, asia], eatingOut)).toBe(8700);
+  });
+
+  it("zwrot schodzi z budzetu kategorii, a nie doklada sie do przychodow", () => {
+    const summary = computeSummary([ramen, asia], [], 0);
+    expect(summary.income).toBe(0);
+    expect(summary.actualExpenses).toBe(8700);
+  });
+
+  it("daje ten sam balans, co zwykly przychod w kategorii przychodowej", () => {
+    const asRefund = computeSummary([ramen, asia], [], 0);
+    const asPlainIncome = computeSummary(
+      [ramen, { ...asia, category_id: salary, is_refund: false }],
+      [],
+      0
+    );
+    expect(asRefund.balanceNow).toBe(asPlainIncome.balanceNow);
+    expect(asRefund.accountBalance).toBe(asPlainIncome.accountBalance);
+    expect(asRefund.accountBalance).toBe(-8700);
+  });
+
+  it("zwrot, ktory jeszcze nie wplynal, nie rusza stanu konta", () => {
+    const summary = computeSummary([ramen, { ...asia, is_paid: false }], [], 0);
+    expect(summary.accountBalance).toBe(-23400);
+    expect(summary.actualExpenses).toBe(8700);
+  });
+
+  it("budzet kategorii nadal rezerwuje caly limit, gdy roznica sie w nim miesci", () => {
+    const budgets = [{ category_id: eatingOut, amount_cents: 50000 }];
+    expect(categoryContribution([ramen, asia], budgets, eatingOut)).toBe(50000);
+  });
+
+  it("zwrot wiekszy od wydatku schodzi ponizej zera", () => {
+    const summary = computeSummary([ramen, { ...asia, amount_cents: 30000 }], [], 0);
+    expect(categorySpent([ramen, { ...asia, amount_cents: 30000 }], eatingOut)).toBe(-6600);
+    expect(summary.balanceNow).toBe(6600);
   });
 });

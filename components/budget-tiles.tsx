@@ -1,7 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
-import { useRouter } from "next/navigation";
+import { useState } from "react";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import {
   setCategoryBudget,
@@ -13,6 +12,8 @@ import type { YearMonth } from "@/lib/month";
 import { useLocale } from "@/components/locale-provider";
 import { categoryDisplayName } from "@/lib/i18n";
 import { CategoryCombobox } from "@/components/category-combobox";
+import { Spinner } from "@/components/ui/spinner";
+import { useAction } from "@/lib/use-action";
 
 type Category = { id: string; name: string; name_en: string | null; emoji: string; color: string };
 export type BudgetRow = { id: string; categoryId: string; limitCents: number; spentCents: number };
@@ -32,11 +33,9 @@ export function BudgetTiles({
   categories: Category[];
   rows: BudgetRow[];
 }) {
-  const router = useRouter();
   const { locale, t } = useLocale();
   const [edit, setEdit] = useState<Draft | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [pending, startTransition] = useTransition();
+  const { pending, busy, error, run } = useAction();
 
   const budgetedIds = new Set(rows.map((r) => r.categoryId));
   const available = categories.filter((c) => !budgetedIds.has(c.id) || c.id === edit?.categoryId);
@@ -46,31 +45,17 @@ export function BudgetTiles({
     e.preventDefault();
     if (!edit) return;
     const amountCents = Math.round(parseFloat(edit.amount.replace(/\s/g, "").replace(",", ".") || "0") * 100);
-    startTransition(async () => {
-      const result = await setCategoryBudget(householdId, walletId, edit.categoryId, ym, amountCents);
-      if (result.error) {
-        setError(result.error);
-        return;
-      }
-      setEdit(null);
-      setError(null);
-      router.refresh();
+    run(() => setCategoryBudget(householdId, walletId, edit.categoryId, ym, amountCents), {
+      onSuccess: () => setEdit(null),
     });
   }
 
   function remove(id: string) {
-    startTransition(async () => {
-      await deleteCategoryBudget(id);
-      setEdit(null);
-      router.refresh();
-    });
+    run(() => deleteCategoryBudget(id), { key: "delete", onSuccess: () => setEdit(null) });
   }
 
   function copyPrev() {
-    startTransition(async () => {
-      await copyBudgetsFromPreviousMonth(householdId, walletId, ym);
-      router.refresh();
-    });
+    run(() => copyBudgetsFromPreviousMonth(householdId, walletId, ym), { key: "copy" });
   }
 
   return (
@@ -93,9 +78,10 @@ export function BudgetTiles({
             type="button"
             onClick={copyPrev}
             disabled={pending}
-            className="w-fit text-sm font-medium disabled:opacity-50"
+            className="flex w-fit items-center gap-2 text-sm font-medium disabled:opacity-50"
             style={{ color: "var(--neatly-primary-dark)" }}
           >
+            {busy("copy") && <Spinner className="h-3.5 w-3.5" />}
             {t.copyPrev}
           </button>
         </div>
@@ -103,7 +89,8 @@ export function BudgetTiles({
         <div className="flex flex-col gap-3">
           {rows.map((row) => {
             const cat = categoryById.get(row.categoryId);
-            const pct = Math.min(100, Math.round((row.spentCents / row.limitCents) * 100));
+            // Zwroty potrafia zbic wydatki kategorii ponizej zera — pasek zatrzymuje sie na pustym.
+            const pct = Math.max(0, Math.min(100, Math.round((row.spentCents / row.limitCents) * 100)));
             const over = row.spentCents > row.limitCents;
             return (
               <button
@@ -181,9 +168,10 @@ export function BudgetTiles({
                 <button
                   type="submit"
                   disabled={pending || !edit.categoryId}
-                  className="flex-1 rounded-[10px] px-4 py-2.5 text-base font-medium text-primary-foreground disabled:opacity-50"
+                  className="flex flex-1 items-center justify-center gap-2 rounded-[10px] px-4 py-2.5 text-base font-medium text-primary-foreground disabled:opacity-50"
                   style={{ background: "var(--primary)" }}
                 >
+                  {pending && !busy("delete") && <Spinner />}
                   {t.save}
                 </button>
                 {edit.id && (
@@ -191,9 +179,10 @@ export function BudgetTiles({
                     type="button"
                     onClick={() => remove(edit.id!)}
                     disabled={pending}
-                    className="rounded-[10px] px-4 py-2.5 text-base font-medium"
+                    className="flex items-center gap-2 rounded-[10px] px-4 py-2.5 text-base font-medium disabled:opacity-50"
                     style={{ background: "var(--neatly-danger-soft)", color: "var(--destructive)" }}
                   >
+                    {busy("delete") && <Spinner />}
                     {t.del}
                   </button>
                 )}

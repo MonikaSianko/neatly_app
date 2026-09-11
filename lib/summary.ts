@@ -5,6 +5,10 @@
  * Model wydatkow (specyfikacja.md #4): dla kazdej kategorii wydatkowej
  * wkladC = max(budzetC, transakcjeC); Wydatki = suma wkladow.
  * Budzet i transakcje z tej samej kategorii nigdy sie nie sumuja.
+ *
+ * Zwrot (is_refund) liczy sie wszedzie jako ujemny wydatek swojej kategorii,
+ * a nie jako przychod — inaczej te same 147,00 zl raz podniosloby przychody,
+ * a raz obnizylo wydatki i balans wyszedlby dwa razy.
  */
 
 export type SummaryTransaction = {
@@ -12,6 +16,8 @@ export type SummaryTransaction = {
   amount_cents: number;
   is_paid: boolean;
   category_id: string;
+  /** Przychod zwracajacy konkretny wydatek. Brak pola = zwykla pozycja. */
+  is_refund?: boolean;
 };
 
 export type SummaryBudget = {
@@ -20,11 +26,11 @@ export type SummaryBudget = {
 };
 
 export type Summary = {
-  /** Wszystkie przychody miesiaca, oplacone czy nie. */
+  /** Wszystkie przychody miesiaca, oplacone czy nie. Bez zwrotow — te siedza w wydatkach. */
   income: number;
   /** Plan wydatkow: per kategoria wieksza z dwoch wartosci — budzet albo realne pozycje. */
   plannedExpenses: number;
-  /** Realne pozycje wydatkowe, bez rezerwacji budzetowych. */
+  /** Realne pozycje wydatkowe pomniejszone o zwroty, bez rezerwacji budzetowych. */
   actualExpenses: number;
   paidIn: number;
   paidOut: number;
@@ -37,10 +43,14 @@ export type Summary = {
   balanceNow: number;
 };
 
+const isRefund = (t: SummaryTransaction) => t.is_refund === true;
+const isPlainIncome = (t: SummaryTransaction) => t.kind === "income" && !isRefund(t);
+const sum = (list: SummaryTransaction[]) => list.reduce((s, t) => s + t.amount_cents, 0);
+
+/** Ile naprawde poszlo na kategorie: wydatki minus zwroty do nich. Moze wyjsc ujemnie. */
 export function categorySpent(transactions: SummaryTransaction[], categoryId: string): number {
-  return transactions
-    .filter((t) => t.kind === "expense" && t.category_id === categoryId)
-    .reduce((sum, t) => sum + t.amount_cents, 0);
+  const inCategory = transactions.filter((t) => t.category_id === categoryId);
+  return sum(inCategory.filter((t) => t.kind === "expense")) - sum(inCategory.filter(isRefund));
 }
 
 export function categoryContribution(
@@ -50,7 +60,8 @@ export function categoryContribution(
 ): number {
   const spent = categorySpent(transactions, categoryId);
   const budget = budgets.find((b) => b.category_id === categoryId)?.amount_cents ?? 0;
-  return Math.max(budget, spent);
+  // Bez budzetu liczy sie sama roznica — rowniez ujemna, gdy zwroty przewyzszyly wydatki.
+  return budget > 0 ? Math.max(budget, spent) : spent;
 }
 
 export function computeSummary(
@@ -58,27 +69,25 @@ export function computeSummary(
   budgets: SummaryBudget[],
   openingCents: number
 ): Summary {
-  const income = transactions.filter((t) => t.kind === "income").reduce((s, t) => s + t.amount_cents, 0);
+  const income = sum(transactions.filter(isPlainIncome));
+  const refunds = sum(transactions.filter(isRefund));
 
   const expenseCategoryIds = new Set<string>([
-    ...transactions.filter((t) => t.kind === "expense").map((t) => t.category_id),
+    ...transactions.filter((t) => t.kind === "expense" || isRefund(t)).map((t) => t.category_id),
     ...budgets.map((b) => b.category_id),
   ]);
   const plannedExpenses = [...expenseCategoryIds].reduce(
-    (sum, categoryId) => sum + categoryContribution(transactions, budgets, categoryId),
+    (total, categoryId) => total + categoryContribution(transactions, budgets, categoryId),
     0
   );
 
-  const actualExpenses = transactions
-    .filter((t) => t.kind === "expense")
-    .reduce((s, t) => s + t.amount_cents, 0);
+  const actualExpenses = sum(transactions.filter((t) => t.kind === "expense")) - refunds;
 
-  const paidIn = transactions
-    .filter((t) => t.kind === "income" && t.is_paid)
-    .reduce((s, t) => s + t.amount_cents, 0);
-  const paidOut = transactions
-    .filter((t) => t.kind === "expense" && t.is_paid)
-    .reduce((s, t) => s + t.amount_cents, 0);
+  const paidIn = sum(transactions.filter((t) => isPlainIncome(t) && t.is_paid));
+  // Zwrot, ktory juz wplynal, oddaje czesc tego, co z konta zeszlo.
+  const paidOut =
+    sum(transactions.filter((t) => t.kind === "expense" && t.is_paid)) -
+    sum(transactions.filter((t) => isRefund(t) && t.is_paid));
 
   return {
     income,
