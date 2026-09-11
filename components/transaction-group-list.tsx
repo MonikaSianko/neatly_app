@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   ChevronDown,
   MoreVertical,
@@ -35,6 +35,7 @@ import { money, shortDate, payNowStyle } from "@/lib/format";
 import { useLocale } from "@/components/locale-provider";
 import { Spinner } from "@/components/ui/spinner";
 import { useAction } from "@/lib/use-action";
+import { clearPendingRows, usePendingRows } from "@/lib/pending-rows";
 import { categoryDisplayName } from "@/lib/i18n";
 
 export type TxRow = {
@@ -91,8 +92,27 @@ export function TransactionGroupList({
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [overrides, setOverrides] = useState<Record<string, boolean>>({});
   const [editing, setEditing] = useState<EditingTransaction | null>(null);
+  // Klucz edytowanego wiersza przezywa zamkniecie arkusza, bo zapis konczy sie juz po nim.
+  const [editingKey, setEditingKey] = useState<string | null>(null);
+  // Wiersze, ktorych dane sa juz nieaktualne (zapisane albo usuwane) — do czasu odpowiedzi
+  // serwera stoi w ich miejscu szkielet, bo stara kwota myli bardziej niz jej brak.
+  const [staleKeys, setStaleKeys] = useState<string[]>([]);
+  const [lastGroups, setLastGroups] = useState(groups);
+  const pendingNewRows = usePendingRows();
   const [deleteTarget, setDeleteTarget] = useState<TxRow | null>(null);
   const { busy, error, run } = useAction();
+
+  // Nowa tablica grup = serwer odeslal swieze dane, wiec nie ma juz na co czekac. Korekta
+  // w trakcie renderu zamiast w efekcie: React powtarza render od razu, bez migniecia szkieletu.
+  if (groups !== lastGroups) {
+    setLastGroups(groups);
+    setStaleKeys([]);
+  }
+
+  // Nowy wpis dojechal razem z ta tablica — zapowiedz mozna zdjac.
+  useEffect(() => {
+    clearPendingRows();
+  }, [groups]);
 
   function toggleGroup(id: string) {
     setExpanded((prev) => {
@@ -129,20 +149,32 @@ export function TransactionGroupList({
     );
   }
 
+  /** Usuwany wiersz od razu idzie w szkielet — zniknie z nim dopiero, gdy przyjda nowe dane. */
+  function markStale(key: string) {
+    setStaleKeys((prev) => (prev.includes(key) ? prev : [...prev, key]));
+  }
+
+  function dropStale(key: string) {
+    setStaleKeys((prev) => prev.filter((x) => x !== key));
+  }
+
   function requestDelete(row: TxRow) {
-    if (row.split_group_id) {
-      // Pojedyncza czesc bez reszty nie zgadzalaby sie z wyciagiem — znika cala platnosc.
-      run(() => deleteSplitTransaction(row.split_group_id!), { key: row.id });
-    } else if (row.recurring_rule_id) {
+    if (row.recurring_rule_id && !row.split_group_id) {
       setDeleteTarget(row);
-    } else {
-      run(() => deleteTransaction(row.id), { key: row.id });
+      return;
     }
+    markStale(row.id);
+    run(
+      // Pojedyncza czesc bez reszty nie zgadzalaby sie z wyciagiem — znika cala platnosc.
+      () => (row.split_group_id ? deleteSplitTransaction(row.split_group_id) : deleteTransaction(row.id)),
+      { onError: () => dropStale(row.id) }
+    );
   }
 
   /** Data i tytul naleza do calej platnosci, wiec edycja czesci otwiera platnosc w calosci. */
   function editRow(row: TxRow, paid: boolean) {
     const split = row.split_group_id ? splitGroups[row.split_group_id] : null;
+    setEditingKey(row.id);
     setEditing({
       id: row.id,
       // Zwrot lezy w grupie wydatkow, ale sam jest przychodem — formularz musi dostac jego wlasny rodzaj.
@@ -184,10 +216,12 @@ export function TransactionGroupList({
     if (!deleteTarget) return;
     const id = deleteTarget.id;
     setDeleteTarget(null);
-    run(() => deleteRecurringEntry(id, scope), { key: id });
+    markStale(id);
+    run(() => deleteRecurringEntry(id, scope), { onError: () => dropStale(id) });
   }
 
-  if (groups.length === 0) {
+  // Pusty miesiac, ale wpis wlasnie leci na serwer — wtedy zamiast komunikatu czeka szkielet.
+  if (groups.length === 0 && pendingNewRows === 0) {
     return (
       <div className="rounded-[14px] border border-border bg-card p-6 text-center text-base text-muted-foreground">
         {t.emptyList}
@@ -224,6 +258,11 @@ export function TransactionGroupList({
                   {group.items.map((row, i) => {
                     const paid = overrides[row.id] ?? row.is_paid;
                     const overdue = !paid && row.date < today;
+                    // Po zapisie wiersz ma stare wartosci az do odpowiedzi serwera — lepiej
+                    // pokazac szkielet niz kwote, ktorej juz nie ma.
+                    if (staleKeys.includes(row.id)) {
+                      return <RowSkeleton key={row.id} withBorder={i > 0} />;
+                    }
                     // Wiersz czekajacy na baze przygasa i nie przyjmuje kolejnych klikniec.
                     const waiting = busy(row.id);
                     return (
@@ -323,11 +362,24 @@ export function TransactionGroupList({
             </div>
           );
         })}
+
+        {/* Nowy wpis nie zna jeszcze swojej kategorii, wiec czeka pod lista, a nie w grupie. */}
+        {pendingNewRows > 0 && (
+          <div className="rounded-[14px] border border-border bg-card">
+            {Array.from({ length: pendingNewRows }, (_, i) => (
+              <RowSkeleton key={`new-${i}`} withBorder={i > 0} />
+            ))}
+          </div>
+        )}
       </div>
 
       {error && <p className="mt-2 text-sm" style={{ color: "var(--destructive)" }}>{error}</p>}
 
       <TransactionForm
+        onSavingChange={(saving) => {
+          if (saving && editingKey) markStale(editingKey);
+          else if (editingKey) dropStale(editingKey);
+        }}
         open={!!editing}
         onOpenChange={(open) => !open && setEditing(null)}
         householdId={householdId}
@@ -345,5 +397,21 @@ export function TransactionGroupList({
         onPick={pickDeleteScope}
       />
     </>
+  );
+}
+
+/** Wiersz w oczekiwaniu na dane po zapisie — te same proporcje, zeby lista nie skakala. */
+function RowSkeleton({ withBorder }: { withBorder: boolean }) {
+  return (
+    <div
+      className={`flex items-center gap-2 px-4 py-2 ${withBorder ? "border-t border-border" : ""}`}
+      aria-busy
+    >
+      <div className="h-4 w-4 shrink-0 animate-pulse rounded-[6px] bg-muted" />
+      <div className="h-4 flex-1 animate-pulse rounded bg-muted" />
+      <div className="h-3 w-12 shrink-0 animate-pulse rounded bg-muted" />
+      <div className="h-4 w-20 shrink-0 animate-pulse rounded bg-muted" />
+      <div className="h-8 w-8 shrink-0 animate-pulse rounded-full bg-muted" />
+    </div>
   );
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   ArrowDownLeft,
   ArrowUpRight,
@@ -17,13 +17,14 @@ import {
   Undo2,
   Search,
 } from "lucide-react";
-import { DraftRecurrenceDialog } from "@/components/draft-recurrence-dialog";
 import { NotePopover } from "@/components/note-popover";
 import { CategoryCombobox } from "@/components/category-combobox";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { TransactionForm, type EditingTransaction, type EditingRule } from "@/components/transaction-form";
@@ -35,10 +36,10 @@ import { saveDraftRows, type DraftRowInput } from "@/lib/actions/drafts";
 import { createClient } from "@/lib/supabase/client";
 import { money, shortDate, parseAmountToCents, payNowStyle, foldText, amountText } from "@/lib/format";
 import { paymentStatus } from "@/lib/month";
-import type { RecurrencePattern } from "@/lib/actions/recurring";
 import { useLocale } from "@/components/locale-provider";
 import { Spinner } from "@/components/ui/spinner";
 import { useAction } from "@/lib/use-action";
+import { clearPendingRows, endPendingRow, startPendingRow, usePendingRows } from "@/lib/pending-rows";
 import { categoryDisplayName } from "@/lib/i18n";
 
 type Category = {
@@ -81,6 +82,7 @@ type PaymentGroup = {
 
 /** Data platnosci to termin, data dodania to moment wpisania pozycji — to dwie rozne rzeczy. */
 type SortKey = "date" | "created";
+type SortDir = "asc" | "desc";
 
 /**
  * Jedna siatka dla naglowka, wierszy danych i wierszy roboczych — inaczej kolumny sie rozjezdzaja.
@@ -97,14 +99,13 @@ type DraftRow = {
   date: string;
   amount: string;
   isPaid: boolean;
-  pattern: RecurrencePattern | null;
 };
 
 let keySeq = 0;
 const nextKey = () => `draft-${++keySeq}-${Date.now()}`;
 
 function mkRow(kind: "expense" | "income", categoryId: string, date: string, patch: Partial<DraftRow> = {}): DraftRow {
-  return { key: nextKey(), kind, title: "", categoryId, date, amount: "", isPaid: false, pattern: null, ...patch };
+  return { key: nextKey(), kind, title: "", categoryId, date, amount: "", isPaid: false, ...patch };
 }
 
 export function UpcomingTable({
@@ -129,16 +130,38 @@ export function UpcomingTable({
 }) {
   const { locale, t } = useLocale();
   const [drafts, setDrafts] = useState<DraftRow[]>([]);
-  const [recIdx, setRecIdx] = useState<number | null>(null);
+  // Indeks wiersza roboczego otwartego w pelnym formularzu.
+  const [draftIdx, setDraftIdx] = useState<number | null>(null);
   const [overrides, setOverrides] = useState<Record<string, boolean>>({});
-  const [sortKey, setSortKey] = useState<SortKey>("date");
+  // Domyslnie w kolejnosci dodawania: ostatnio wpisana pozycja ląduje na koncu listy.
+  const [sortKey, setSortKey] = useState<SortKey>("created");
+  const [sortDir, setSortDir] = useState<SortDir>("asc");
   const [query, setQuery] = useState("");
   const [showPaid, setShowPaid] = useState(false);
   const [editing, setEditing] = useState<EditingTransaction | null>(null);
+  // Klucz edytowanej platnosci przezywa zamkniecie arkusza, bo zapis konczy sie juz po nim.
+  const [editingKey, setEditingKey] = useState<string | null>(null);
+  // Wiersze, ktorych dane sa juz nieaktualne (zapisane albo usuwane) — do czasu odpowiedzi
+  // serwera stoi w ich miejscu szkielet, bo pokazywanie starej kwoty myli bardziej niz jej brak.
+  const [staleKeys, setStaleKeys] = useState<string[]>([]);
+  const [lastRows, setLastRows] = useState(rows);
+  const pendingNewRows = usePendingRows();
   const [deleteTarget, setDeleteTarget] = useState<UpcomingRow | null>(null);
   const [expandedSplits, setExpandedSplits] = useState<Set<string>>(new Set());
   const { pending, busy, error, run } = useAction();
   const lastInputRef = useRef<HTMLInputElement | null>(null);
+
+  // Nowa tablica wierszy = serwer odeslal swieze dane, wiec nie ma juz na co czekac. Korekta
+  // w trakcie renderu zamiast w efekcie: React powtarza render od razu, bez migniecia szkieletu.
+  if (rows !== lastRows) {
+    setLastRows(rows);
+    setStaleKeys([]);
+  }
+
+  // Nowy wpis dojechal razem z ta tablica — zapowiedz mozna zdjac.
+  useEffect(() => {
+    clearPendingRows();
+  }, [rows]);
 
   const categoryById = new Map(categories.map((c) => [c.id, c]));
   const catsOf = (kind: "expense" | "income") => categories.filter((c) => c.kind === kind);
@@ -196,6 +219,19 @@ export function UpcomingTable({
     });
   }
 
+  /** Wiersz roboczy w jezyku formularza. Pusta kwota zostaje pusta, a nie jako "0,00". */
+  function draftPrefill(r: DraftRow): Partial<EditingTransaction> {
+    const cents = parseAmountToCents(r.amount);
+    return {
+      kind: r.kind,
+      title: r.title,
+      categoryId: r.categoryId,
+      date: r.date,
+      isPaid: r.isPaid,
+      ...(cents ? { amountCents: cents } : {}),
+    };
+  }
+
   const isPaid = (row: UpcomingRow) => overrides[row.id] ?? row.is_paid;
 
   function toggleSplit(key: string) {
@@ -236,21 +272,33 @@ export function UpcomingTable({
     );
   }
 
+  /** Usuwany wiersz od razu idzie w szkielet — zniknie z nim dopiero, gdy przyjda nowe dane. */
+  function markStale(key: string) {
+    setStaleKeys((prev) => (prev.includes(key) ? prev : [...prev, key]));
+  }
+
+  function dropStale(key: string) {
+    setStaleKeys((prev) => prev.filter((x) => x !== key));
+  }
+
   function requestDelete(group: PaymentGroup) {
-    if (group.parts.length > 0) {
-      run(() => deleteSplitTransaction(group.key), { key: group.key });
-    } else if (group.head.recurring_rule_id) {
+    if (group.head.recurring_rule_id && group.parts.length === 0) {
       setDeleteTarget(group.head);
-    } else {
-      run(() => deleteTransaction(group.head.id), { key: group.key });
+      return;
     }
+    markStale(group.key);
+    run(
+      () => (group.parts.length > 0 ? deleteSplitTransaction(group.key) : deleteTransaction(group.head.id)),
+      { onError: () => dropStale(group.key) }
+    );
   }
 
   function pickDeleteScope(scope: Scope) {
     if (!deleteTarget) return;
     const id = deleteTarget.id;
     setDeleteTarget(null);
-    run(() => deleteRecurringEntry(id, scope), { key: id });
+    markStale(id);
+    run(() => deleteRecurringEntry(id, scope), { onError: () => dropStale(id) });
   }
 
   /** Czesci jednej platnosci schodza sie w jeden wiersz z suma — taka kwota widnieje na wyciagu. */
@@ -271,11 +319,13 @@ export function UpcomingTable({
       groups.push({ key, head: parts[0], parts, total: parts.reduce((s, p) => s + p.amount_cents, 0) });
     }
 
-    return groups.sort((a, b) =>
-      sortKey === "created"
-        ? b.head.created_at.localeCompare(a.head.created_at)
-        : a.head.date.localeCompare(b.head.date) || a.head.title.localeCompare(b.head.title)
-    );
+    return groups.sort((a, b) => {
+      const rising =
+        sortKey === "created"
+          ? a.head.created_at.localeCompare(b.head.created_at)
+          : a.head.date.localeCompare(b.head.date) || a.head.title.localeCompare(b.head.title);
+      return sortDir === "asc" ? rising : -rising;
+    });
   }
 
   /**
@@ -325,15 +375,20 @@ export function UpcomingTable({
       categoryId: r.categoryId,
       date: r.date,
       isPaid: r.isPaid,
-      pattern: r.pattern,
     }));
-    run(() => saveDraftRows(householdId, walletId, input), { onSuccess: () => setDrafts([]) });
+    // Wiersze robocze znikaja od razu po zapisie, wiec az do odswiezenia trzymaja miejsce szkielety.
+    input.forEach(startPendingRow);
+    run(() => saveDraftRows(householdId, walletId, input), {
+      onSuccess: () => setDrafts([]),
+      onError: () => input.forEach(endPendingRow),
+    });
   }
 
   /** Edycje otwiera menu (...) — i na telefonie, i na desktopie, z jednego zrodla danych. */
   function openEdit(group: PaymentGroup) {
     const row = group.head;
     const split = group.parts.length > 0;
+    setEditingKey(group.key);
     setEditing({
       id: row.id,
       kind: row.kind,
@@ -397,6 +452,10 @@ export function UpcomingTable({
       : cat
         ? categoryDisplayName(cat.name, locale, cat.name_en)
         : "";
+
+    // Po zapisie wiersz ma stare wartosci az do odpowiedzi serwera — lepiej pokazac szkielet
+    // niz kwote, ktorej juz nie ma.
+    if (staleKeys.includes(group.key)) return <RowSkeleton key={group.key} withBorder={withBorder} />;
 
     // Wiersz w trakcie zapisu przygasa i nie przyjmuje kolejnych klikniec, zeby podwojne
     // dotkniecie nie wyslalo dwoch sprzecznych zmian.
@@ -694,28 +753,24 @@ export function UpcomingTable({
 
         <div className="flex flex-wrap items-center gap-2 text-base">
         <span className="text-muted-foreground">{t.sortBy}</span>
-        <div className="flex gap-1 rounded-full border border-border bg-card p-1">
-          {(
-            [
-              ["date", t.sortByDate],
-              ["created", t.sortByAdded],
-            ] as const
-          ).map(([key, label]) => (
-            <button
-              key={key}
-              type="button"
-              onClick={() => setSortKey(key)}
-              className="min-h-9 rounded-full px-3 text-sm font-medium sm:min-h-7"
-              style={
-                sortKey === key
-                  ? { background: "var(--neatly-primary-soft)", color: "var(--neatly-primary-dark)" }
-                  : { color: "var(--muted-foreground)" }
-              }
-            >
-              {label}
-            </button>
-          ))}
-        </div>
+        <SortMenu
+          label={t.sortBy}
+          value={sortKey}
+          onChange={(next) => setSortKey(next as SortKey)}
+          options={[
+            { value: "date", label: t.sortByDate },
+            { value: "created", label: t.sortByAdded },
+          ]}
+        />
+        <SortMenu
+          label={t.sortDirection}
+          value={sortDir}
+          onChange={(next) => setSortDir(next as SortDir)}
+          options={[
+            { value: "asc", label: t.sortOldest },
+            { value: "desc", label: t.sortNewest },
+          ]}
+        />
 
         {filtering && (
           <span className="text-sm text-muted-foreground">
@@ -729,13 +784,13 @@ export function UpcomingTable({
         {/* Szerokosc minimalna dopiero od lg, gdzie tabela ma sie gdzie zmiescic. Nizej
             wchodzi uklad dwuwierszowy, wiec przewijanie w poziomie nigdy nie jest potrzebne. */}
         <div className="lg:min-w-[812px]">
-          {shown === 0 && drafts.length === 0 && (
+          {shown === 0 && drafts.length === 0 && pendingNewRows === 0 && (
             <div className="px-4 py-10 text-center text-base text-muted-foreground">
               {filtering ? t.noResults : t.noUpcoming}
             </div>
           )}
 
-          {(shown > 0 || drafts.length > 0) && (
+          {(shown > 0 || drafts.length > 0 || pendingNewRows > 0) && (
             <div
               className={`${GRID} hidden items-center gap-1 border-b border-border bg-muted/50 px-2 py-2 text-xs font-medium tracking-wide text-muted-foreground uppercase lg:grid`}
             >
@@ -774,11 +829,15 @@ export function UpcomingTable({
 
           {openGroups.map((group, i) => renderGroup(group, i > 0 || paidGroups.length > 0))}
 
+          {/* Nowy wpis jeszcze nie wrocil z serwera — do tego czasu trzyma miejsce na koncu listy. */}
+          {Array.from({ length: pendingNewRows }, (_, i) => (
+            <RowSkeleton key={`new-${i}`} withBorder={i > 0 || openGroups.length > 0 || paidGroups.length > 0} />
+          ))}
+
           {/* Wiersze robocze tylko od sm — na telefonie dodaje sie przez przycisk +. */}
           {drafts.map((r, i) => {
             const isLast = i === drafts.length - 1;
             const cat = categoryById.get(r.categoryId);
-            const cyclic = !!r.pattern;
             return (
               <div
                 key={r.key}
@@ -811,7 +870,6 @@ export function UpcomingTable({
                     onKeyDown={(e) => onKeyDown(e, i, isLast)}
                     className="w-full min-w-0 rounded-sm bg-transparent text-base outline-none focus-visible:ring-2 focus-visible:ring-ring"
                   />
-                  {cyclic && <Repeat className="h-3.5 w-3.5 shrink-0 text-primary" />}
                 </div>
 
                 <div className="flex min-w-0 items-center gap-1">
@@ -850,10 +908,9 @@ export function UpcomingTable({
                 <div className="flex items-center justify-end gap-1">
                   <button
                     type="button"
-                    onClick={() => setRecIdx(i)}
-                    className="flex h-9 w-9 items-center justify-center rounded-md sm:h-7 sm:w-7"
-                    style={cyclic ? { color: "var(--primary)", background: "var(--neatly-primary-soft)" } : { color: "var(--muted-foreground)" }}
-                    aria-label={t.recurrence}
+                    onClick={() => setDraftIdx(i)}
+                    className="flex h-9 w-9 items-center justify-center rounded-md text-muted-foreground sm:h-7 sm:w-7"
+                    aria-label={t.editEntry}
                   >
                     <MoreVertical className="h-3.5 w-3.5" />
                   </button>
@@ -931,19 +988,31 @@ export function UpcomingTable({
       {drafts.length > 0 && <p className="mt-2 text-sm text-muted-foreground">{t.quickHint}</p>}
       {error && <p className="mt-2 text-sm" style={{ color: "var(--destructive)" }}>{error}</p>}
 
-      {recIdx !== null && drafts[recIdx] && (
-        <DraftRecurrenceDialog
+      {/* Wiersz roboczy otwiera ten sam formularz co reszta pozycji. Zapis tworzy wpis od razu,
+          wiec wiersz schodzi z listy roboczej — inaczej "Zapisz wszystko" dodaloby go drugi raz.
+          Klucz wiersza przemontowuje formularz, zeby kolejny wiersz nie odziedziczyl poprzednich pol. */}
+      {draftIdx !== null && drafts[draftIdx] && (
+        <TransactionForm
+          key={drafts[draftIdx].key}
           open
-          onOpenChange={(open) => !open && setRecIdx(null)}
-          initialPattern={drafts[recIdx].pattern}
-          onApply={(pattern) => {
-            update(recIdx, { pattern });
-            setRecIdx(null);
+          onOpenChange={(open) => !open && setDraftIdx(null)}
+          householdId={householdId}
+          walletId={walletId}
+          categories={categories}
+          defaultDate={defaultDate}
+          prefill={draftPrefill(drafts[draftIdx])}
+          onSaved={() => {
+            removeRow(draftIdx);
+            setDraftIdx(null);
           }}
         />
       )}
 
       <TransactionForm
+        onSavingChange={(saving) => {
+          if (saving && editingKey) markStale(editingKey);
+          else if (editingKey) dropStale(editingKey);
+        }}
         open={!!editing}
         onOpenChange={(open) => !open && setEditing(null)}
         householdId={householdId}
@@ -961,5 +1030,79 @@ export function UpcomingTable({
         onPick={pickDeleteScope}
       />
     </>
+  );
+}
+
+/**
+ * Wiersz w oczekiwaniu na dane po zapisie. Odwzorowuje oba uklady — dwuwierszowy na telefonie
+ * i siatke na desktopie — zeby tabela nie skakala w momencie podmiany.
+ */
+function RowSkeleton({ withBorder }: { withBorder: boolean }) {
+  return (
+    <div className={withBorder ? "border-t border-border" : ""} aria-busy>
+      <div className="flex items-center gap-2 px-3 py-2.5 lg:hidden">
+        <div className="min-w-0 flex-1">
+          <div className="h-4 w-40 max-w-full animate-pulse rounded bg-muted" />
+          <div className="mt-1.5 h-3 w-28 max-w-full animate-pulse rounded bg-muted" />
+        </div>
+        <div className="h-4 w-20 shrink-0 animate-pulse rounded bg-muted" />
+        <div className="h-7 w-7 shrink-0 animate-pulse rounded-[7px] bg-muted" />
+        <div className="h-8 w-8 shrink-0 animate-pulse rounded-full bg-muted" />
+      </div>
+
+      <div className={`${GRID} hidden items-center gap-1 px-2 py-2 lg:grid`}>
+        <div className="mx-auto h-6 w-6 animate-pulse rounded-full bg-muted" />
+        <div className="h-4 w-32 animate-pulse rounded bg-muted" />
+        <div className="h-4 w-24 animate-pulse rounded bg-muted" />
+        <div className="h-4 w-14 animate-pulse rounded bg-muted" />
+        <div className="h-4 w-14 animate-pulse rounded bg-muted" />
+        <div className="ml-auto h-4 w-20 animate-pulse rounded bg-muted" />
+        <div />
+        <div className="mx-auto h-5 w-5 animate-pulse rounded-[6px] bg-muted" />
+        <div className="mx-auto h-5 w-5 animate-pulse rounded-full bg-muted" />
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Wybor sortowania na tych samych klockach co przelacznik jezyka i portfela — natywny <select>
+ * otwiera liste malowana przez system, ktora nie ma nic wspolnego z reszta aplikacji.
+ */
+function SortMenu({
+  label,
+  value,
+  options,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  options: { value: string; label: string }[];
+  onChange: (value: string) => void;
+}) {
+  const current = options.find((o) => o.value === value);
+
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <button
+          type="button"
+          aria-label={label}
+          className="flex min-h-9 items-center gap-1 rounded-[10px] border border-border bg-card px-2.5 text-sm font-medium hover:bg-muted sm:min-h-8"
+        >
+          {current?.label}
+          <ChevronDown className="h-4 w-4 text-muted-foreground" />
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="start" className="min-w-44">
+        <DropdownMenuRadioGroup value={value} onValueChange={onChange}>
+          {options.map((option) => (
+            <DropdownMenuRadioItem key={option.value} value={option.value}>
+              {option.label}
+            </DropdownMenuRadioItem>
+          ))}
+        </DropdownMenuRadioGroup>
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }

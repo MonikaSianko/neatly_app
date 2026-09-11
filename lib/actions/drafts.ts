@@ -13,7 +13,8 @@ export type DraftRowInput = {
   categoryId: string;
   date: string;
   isPaid: boolean;
-  pattern: RecurrencePattern | null;
+  /** Cyklicznosc wierszy hurtowych ustawia sie w pelnym formularzu, wiec zwykle jej tu nie ma. */
+  pattern?: RecurrencePattern | null;
 };
 
 export async function saveDraftRows(householdId: string, walletId: string, rows: DraftRowInput[]) {

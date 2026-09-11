@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Minus, Plus, Undo2, X, Zap } from "lucide-react";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { createTransaction, updateTransaction } from "@/lib/actions/transactions";
@@ -25,6 +25,7 @@ import { parseAmountToCents } from "@/lib/format";
 import { useLocale } from "@/components/locale-provider";
 import { useKeyboardInset } from "@/lib/use-keyboard-inset";
 import { useAction } from "@/lib/use-action";
+import { startPendingRow, endPendingRow } from "@/lib/pending-rows";
 import { Spinner } from "@/components/ui/spinner";
 import { WEEKDAYS, categoryDisplayName } from "@/lib/i18n";
 
@@ -92,6 +93,9 @@ export function TransactionForm({
   categories,
   defaultDate,
   editing,
+  prefill,
+  onSaved,
+  onSavingChange,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -100,6 +104,15 @@ export function TransactionForm({
   categories: Category[];
   defaultDate: string;
   editing?: EditingTransaction | null;
+  /**
+   * Wartosci poczatkowe dla nowej pozycji — bez id, wiec zapis tworzy wpis, a nie aktualizuje.
+   * Stad wiersz roboczy szybkiego dodawania otwiera ten sam formularz co kazda inna pozycja.
+   */
+  prefill?: Partial<EditingTransaction>;
+  /** Wywolywane po udanym zapisie, gdy samo zamkniecie arkusza to za malo (np. zdjecie wiersza roboczego). */
+  onSaved?: () => void;
+  /** Mowi liscie, ze zapis trwa — edytowany wiersz moze wtedy schowac nieaktualne juz dane. */
+  onSavingChange?: (saving: boolean) => void;
 }) {
   const { t } = useLocale();
   return (
@@ -117,6 +130,9 @@ export function TransactionForm({
             categories={categories}
             defaultDate={defaultDate}
             editing={editing}
+            prefill={prefill}
+            onSaved={onSaved}
+            onSavingChange={onSavingChange}
           />
         )}
       </SheetContent>
@@ -131,6 +147,9 @@ function TransactionFormFields({
   categories,
   defaultDate,
   editing,
+  prefill,
+  onSaved,
+  onSavingChange,
 }: {
   onOpenChange: (open: boolean) => void;
   householdId: string;
@@ -138,26 +157,31 @@ function TransactionFormFields({
   categories: Category[];
   defaultDate: string;
   editing?: EditingTransaction | null;
+  prefill?: Partial<EditingTransaction>;
+  onSaved?: () => void;
+  onSavingChange?: (saving: boolean) => void;
 }) {
   const { locale, t } = useLocale();
   const weekdayLabels = WEEKDAYS[locale];
-  const [kind, setKind] = useState<"expense" | "income">(editing?.kind ?? "expense");
-  const [amount, setAmount] = useState(editing ? (editing.amountCents / 100).toFixed(2).replace(".", ",") : "");
-  const [title, setTitle] = useState(editing?.title ?? "");
-  const [categoryId, setCategoryId] = useState(editing?.categoryId ?? "");
-  const [date, setDate] = useState(editing?.date ?? defaultDate);
-  const [isPaid, setIsPaid] = useState(editing?.isPaid ?? false);
-  const [paymentUrl, setPaymentUrl] = useState(editing?.paymentUrl ?? "");
-  const [graceDays, setGraceDays] = useState(String(editing?.graceDays ?? 0));
-  const [note, setNote] = useState(editing?.note ?? "");
-  const [isAutomatic, setIsAutomatic] = useState(editing?.isAutomatic ?? false);
-  const [isSplit, setIsSplit] = useState(!!editing?.splitGroupId);
-  const [isRefund, setIsRefund] = useState(!!editing?.isRefund);
-  const [refundOfId, setRefundOfId] = useState<string | null>(editing?.refundOfId ?? null);
+  // Edycja karmi formularz istniejacym wpisem, wartosci wstepne — swiezym wierszem roboczym.
+  const initial = editing ?? prefill;
+  const [kind, setKind] = useState<"expense" | "income">(initial?.kind ?? "expense");
+  const [amount, setAmount] = useState(initial?.amountCents ? (initial.amountCents / 100).toFixed(2).replace(".", ",") : "");
+  const [title, setTitle] = useState(initial?.title ?? "");
+  const [categoryId, setCategoryId] = useState(initial?.categoryId ?? "");
+  const [date, setDate] = useState(initial?.date ?? defaultDate);
+  const [isPaid, setIsPaid] = useState(initial?.isPaid ?? false);
+  const [paymentUrl, setPaymentUrl] = useState(initial?.paymentUrl ?? "");
+  const [graceDays, setGraceDays] = useState(String(initial?.graceDays ?? 0));
+  const [note, setNote] = useState(initial?.note ?? "");
+  const [isAutomatic, setIsAutomatic] = useState(initial?.isAutomatic ?? false);
+  const [isSplit, setIsSplit] = useState(!!initial?.splitGroupId);
+  const [isRefund, setIsRefund] = useState(!!initial?.isRefund);
+  const [refundOfId, setRefundOfId] = useState<string | null>(initial?.refundOfId ?? null);
   const [refundTargets, setRefundTargets] = useState<RefundTarget[] | null>(null);
   const [parts, setParts] = useState<PartDraft[]>(() =>
-    editing?.splitParts?.length
-      ? editing.splitParts.map((p) => ({
+    initial?.splitParts?.length
+      ? initial.splitParts.map((p) => ({
           key: `part-${++partSeq}`,
           id: p.id,
           categoryId: p.categoryId,
@@ -168,16 +192,49 @@ function TransactionFormFields({
   );
   const { pending, error, setError, run } = useAction();
 
-  const [repeat, setRepeat] = useState<RepeatPreset>(presetFromRule(editing?.rule));
-  const [customFreq, setCustomFreq] = useState<"day" | "week" | "month" | "year">(editing?.rule?.freq ?? "month");
-  const [customInterval, setCustomInterval] = useState(String(editing?.rule?.interval ?? 1));
-  const [weekdays, setWeekdays] = useState<number[]>(editing?.rule?.weekdays ?? []);
-  const [untilMode, setUntilMode] = useState<"never" | "date">(editing?.rule?.untilDate ? "date" : "never");
-  const [untilDate, setUntilDate] = useState(editing?.rule?.untilDate ?? "");
+  const [repeat, setRepeat] = useState<RepeatPreset>(presetFromRule(initial?.rule));
+  const [customFreq, setCustomFreq] = useState<"day" | "week" | "month" | "year">(initial?.rule?.freq ?? "month");
+  const [customInterval, setCustomInterval] = useState(String(initial?.rule?.interval ?? 1));
+  const [weekdays, setWeekdays] = useState<number[]>(initial?.rule?.weekdays ?? []);
+  const [untilMode, setUntilMode] = useState<"never" | "date">(initial?.rule?.untilDate ? "date" : "never");
+  const [untilDate, setUntilDate] = useState(initial?.rule?.untilDate ?? "");
+
+  /** Udany zapis zamyka arkusz; wiersz roboczy ma sie wtedy dodatkowo zdjac z listy. */
+  function finishSave() {
+    onOpenChange(false);
+    onSaved?.();
+  }
+
+  /**
+   * Nowa pozycja pojawi sie w tabeli dopiero po odswiezeniu, a arkusz zamyka sie wczesniej —
+   * do tego czasu tabela trzyma w jej miejscu szkielet. Przy edycji nie ma czego zapowiadac,
+   * bo wiersz juz tam stoi.
+   */
+  const announcesNewRow = !editing;
+
+  function beginSave() {
+    if (announcesNewRow) startPendingRow();
+  }
+
+  function failedSave() {
+    if (announcesNewRow) endPendingRow();
+  }
 
   const keyboardInset = useKeyboardInset();
   const [scopeOpen, setScopeOpen] = useState(false);
   const [pendingInput, setPendingInput] = useState<RecurringEntryInput | null>(null);
+
+  /**
+   * Zapis zamyka arkusz, zanim serwer odesle nowe dane, wiec lista musi wiedziec, ze czeka —
+   * inaczej przez chwile pokazuje stare kwoty jak gdyby nigdy nic. Ref pilnuje, zeby zgloszenie
+   * szlo tylko przy zmianie stanu, a nie przy kazdym renderze.
+   */
+  const reportedSaving = useRef(false);
+  useEffect(() => {
+    if (reportedSaving.current === pending) return;
+    reportedSaving.current = pending;
+    onSavingChange?.(pending);
+  }, [pending, onSavingChange]);
 
   // Lista platnosci jedzie z serwera dopiero, gdy zwrot jest zaznaczony — i tylko raz na otwarcie.
   useEffect(() => {
@@ -305,6 +362,7 @@ function TransactionFormFields({
           label: part.label.trim() || null,
         })),
       };
+      beginSave();
       run(
         // Kolejnosc ma znaczenie: edytowana pozycja musi zostac przerobiona, a nie zdublowana.
         () =>
@@ -313,7 +371,7 @@ function TransactionFormFields({
             : editing
               ? convertToSplit(editing.id, splitInput)
               : createSplitTransaction(householdId, walletId, splitInput),
-        { onSuccess: () => onOpenChange(false) }
+        { onSuccess: finishSave, onError: failedSave }
       );
       return;
     }
@@ -336,6 +394,7 @@ function TransactionFormFields({
       return;
     }
 
+    beginSave();
     run(
       async () => {
         let result: { error: string | null };
@@ -394,7 +453,7 @@ function TransactionFormFields({
         }
         return result;
       },
-      { onSuccess: () => onOpenChange(false) }
+      { onSuccess: finishSave, onError: failedSave }
     );
   }
 
@@ -410,9 +469,7 @@ function TransactionFormFields({
   function pickScope(scope: Scope) {
     if (!editing || !pendingInput) return;
     setScopeOpen(false);
-    run(() => updateRecurringEntry(editing.id, scope, pendingInput), {
-      onSuccess: () => onOpenChange(false),
-    });
+    run(() => updateRecurringEntry(editing.id, scope, pendingInput), { onSuccess: finishSave });
   }
 
   return (
