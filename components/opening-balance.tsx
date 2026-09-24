@@ -9,6 +9,7 @@ import type { YearMonth } from "@/lib/month";
 import { useLocale } from "@/components/locale-provider";
 import { Spinner } from "@/components/ui/spinner";
 import { useAction } from "@/lib/use-action";
+import { pendingSummary } from "@/lib/pending-signal";
 
 export function OpeningBalance({
   householdId,
@@ -28,20 +29,25 @@ export function OpeningBalance({
 
   function save() {
     const cents = Math.round(parseFloat(amount.replace(/\s/g, "").replace(",", ".") || "0") * 100);
+    // Stan poczatkowy wchodzi do kazdej kwoty w karcie — do czasu przeliczenia caly ten
+    // komponent stoi w szkielecie, zamiast pokazywac liczby, ktore juz sie nie zgadzaja.
+    pendingSummary.start();
     run(() => setMonthOpening(householdId, walletId, ym, cents), {
       key: "save",
       onSuccess: () => setOpen(false),
+      onError: () => pendingSummary.end(),
     });
   }
 
   function carryOver() {
+    pendingSummary.start();
     run(
       async () => {
         const result = await carryOverOpening(householdId, walletId, ym);
         if (result.amountCents != null) setAmount((result.amountCents / 100).toFixed(2).replace(".", ","));
         setOpen(false);
       },
-      { key: "carry" }
+      { key: "carry", onError: () => pendingSummary.end() }
     );
   }
 

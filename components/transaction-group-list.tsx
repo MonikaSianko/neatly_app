@@ -35,7 +35,7 @@ import { money, shortDate, payNowStyle } from "@/lib/format";
 import { useLocale } from "@/components/locale-provider";
 import { Spinner } from "@/components/ui/spinner";
 import { useAction } from "@/lib/use-action";
-import { clearPendingRows, usePendingRows } from "@/lib/pending-rows";
+import { pendingRows } from "@/lib/pending-signal";
 import { categoryDisplayName } from "@/lib/i18n";
 
 export type TxRow = {
@@ -98,7 +98,7 @@ export function TransactionGroupList({
   // serwera stoi w ich miejscu szkielet, bo stara kwota myli bardziej niz jej brak.
   const [staleKeys, setStaleKeys] = useState<string[]>([]);
   const [lastGroups, setLastGroups] = useState(groups);
-  const pendingNewRows = usePendingRows();
+  const pendingNewRows = pendingRows.useCount();
   const [deleteTarget, setDeleteTarget] = useState<TxRow | null>(null);
   const { busy, error, run } = useAction();
 
@@ -111,7 +111,7 @@ export function TransactionGroupList({
 
   // Nowy wpis dojechal razem z ta tablica — zapowiedz mozna zdjac.
   useEffect(() => {
-    clearPendingRows();
+    pendingRows.clear();
   }, [groups]);
 
   function toggleGroup(id: string) {

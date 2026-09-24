@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import {
   setCategoryBudget,
@@ -14,6 +14,7 @@ import { categoryDisplayName } from "@/lib/i18n";
 import { CategoryCombobox } from "@/components/category-combobox";
 import { Spinner } from "@/components/ui/spinner";
 import { useAction } from "@/lib/use-action";
+import { pendingBudgets, pendingSummary } from "@/lib/pending-signal";
 
 type Category = { id: string; name: string; name_en: string | null; emoji: string; color: string };
 export type BudgetRow = { id: string; categoryId: string; limitCents: number; spentCents: number };
@@ -36,6 +37,22 @@ export function BudgetTiles({
   const { locale, t } = useLocale();
   const [edit, setEdit] = useState<Draft | null>(null);
   const { pending, busy, error, run } = useAction();
+  // Limit zmienia i kafelki, i wydatki planowane w karcie obok — stad dwa sygnaly naraz.
+  const recalculating = pendingBudgets.useCount() > 0;
+
+  useEffect(() => {
+    pendingBudgets.clear();
+  }, [rows]);
+
+  function startRecalculation() {
+    pendingBudgets.start();
+    pendingSummary.start();
+  }
+
+  function cancelRecalculation() {
+    pendingBudgets.end();
+    pendingSummary.end();
+  }
 
   const budgetedIds = new Set(rows.map((r) => r.categoryId));
   const available = categories.filter((c) => !budgetedIds.has(c.id) || c.id === edit?.categoryId);
@@ -45,17 +62,25 @@ export function BudgetTiles({
     e.preventDefault();
     if (!edit) return;
     const amountCents = Math.round(parseFloat(edit.amount.replace(/\s/g, "").replace(",", ".") || "0") * 100);
+    startRecalculation();
     run(() => setCategoryBudget(householdId, walletId, edit.categoryId, ym, amountCents), {
       onSuccess: () => setEdit(null),
+      onError: cancelRecalculation,
     });
   }
 
   function remove(id: string) {
-    run(() => deleteCategoryBudget(id), { key: "delete", onSuccess: () => setEdit(null) });
+    startRecalculation();
+    run(() => deleteCategoryBudget(id), {
+      key: "delete",
+      onSuccess: () => setEdit(null),
+      onError: cancelRecalculation,
+    });
   }
 
   function copyPrev() {
-    run(() => copyBudgetsFromPreviousMonth(householdId, walletId, ym), { key: "copy" });
+    startRecalculation();
+    run(() => copyBudgetsFromPreviousMonth(householdId, walletId, ym), { onError: cancelRecalculation });
   }
 
   return (
@@ -71,17 +96,29 @@ export function BudgetTiles({
         </button>
       </div>
 
-      {rows.length === 0 ? (
+      {recalculating ? (
+        <div className="flex flex-col gap-3" aria-busy>
+          {Array.from({ length: Math.max(1, rows.length) }, (_, i) => (
+            <div key={i} className="rounded-[10px] border border-border p-3">
+              <div className="flex items-center justify-between gap-2">
+                <div className="h-4 w-32 animate-pulse rounded bg-muted" />
+                <div className="h-4 w-24 animate-pulse rounded bg-muted" />
+              </div>
+              <div className="mt-2 h-2 w-full animate-pulse rounded-full bg-muted" />
+              <div className="mt-1 h-3 w-20 animate-pulse rounded bg-muted" />
+            </div>
+          ))}
+        </div>
+      ) : rows.length === 0 ? (
         <div className="flex flex-col gap-3">
           <p className="text-sm text-muted-foreground">{t.budgetsEmpty}</p>
           <button
             type="button"
             onClick={copyPrev}
             disabled={pending}
-            className="flex w-fit items-center gap-2 text-sm font-medium disabled:opacity-50"
+            className="w-fit text-sm font-medium disabled:opacity-50"
             style={{ color: "var(--neatly-primary-dark)" }}
           >
-            {busy("copy") && <Spinner className="h-3.5 w-3.5" />}
             {t.copyPrev}
           </button>
         </div>

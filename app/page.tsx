@@ -67,7 +67,9 @@ export default async function Home({
       />
 
       {/* Boczna kolumna dopiero od xl: wczesniej zabierala 320px i tabela nie miala gdzie sie zmiescic. */}
-      <main className="mx-auto flex w-full max-w-[1600px] flex-1 flex-col gap-4 px-2 py-4 md:px-4 md:py-5 xl:grid xl:grid-cols-[1fr_320px] xl:items-start xl:gap-5">
+      {/* Dol strony odsuniety o wysokosc przycisku "+" razem z jego odstepem od krawedzi —
+          inaczej przycisk siedzi na ostatnim wierszu tabeli i zasłania go na kazdym ekranie. */}
+      <main className="mx-auto flex w-full max-w-[1600px] flex-1 flex-col gap-4 px-2 pt-4 pb-[calc(5.5rem+env(safe-area-inset-bottom))] md:px-4 md:pt-5 xl:grid xl:grid-cols-[1fr_320px] xl:items-start xl:gap-5">
         {/* Klucz przelacza granice przy zmianie portfela/miesiaca, wiec szkielet pojawia sie od razu. */}
         <Suspense key={`${activeWalletId}-${monthKey(ym)}`} fallback={<MonthSkeleton />}>
           <MonthContent

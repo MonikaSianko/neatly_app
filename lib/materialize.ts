@@ -8,8 +8,10 @@ import { occurrences } from "./recurrence";
  *
  * Kolejnosc obrony przed duplikatami (najpierw logika, potem indeks):
  * 1. Sprawdzamy, ktore daty juz istnieja dla danej reguly w tym miesiacu.
- * 2. Wstawiamy tylko brakujace.
- * 3. Unikalny indeks (recurring_rule_id, date) chroni na wypadek wyscigu.
+ * 2. Pomijamy terminy wykreslone z serii (recurring_skips) — rata skasowana albo przeniesiona
+ *    na inny dzien zostawia po sobie wolny termin, ktory inaczej wygladalby jak brakujacy.
+ * 3. Wstawiamy tylko reszte.
+ * 4. Unikalny indeks (recurring_rule_id, date) chroni na wypadek wyscigu.
  */
 export async function ensureMonthMaterialized(
   supabase: SupabaseClient,
@@ -39,7 +41,17 @@ export async function ensureMonthMaterialized(
     .gte("date", range.from)
     .lte("date", range.to);
 
-  const existingKeys = new Set((existing ?? []).map((t) => `${t.recurring_rule_id}:${t.date}`));
+  const { data: skips } = await supabase
+    .from("recurring_skips")
+    .select("rule_id, date")
+    .in("rule_id", ruleIds)
+    .gte("date", range.from)
+    .lte("date", range.to);
+
+  const takenKeys = new Set([
+    ...(existing ?? []).map((t) => `${t.recurring_rule_id}:${t.date}`),
+    ...(skips ?? []).map((s) => `${s.rule_id}:${s.date}`),
+  ]);
 
   const rows = rules.flatMap((rule) => {
     const dates = occurrences(
@@ -54,7 +66,7 @@ export async function ensureMonthMaterialized(
       range.to
     );
     return dates
-      .filter((date) => !existingKeys.has(`${rule.id}:${date}`))
+      .filter((date) => !takenKeys.has(`${rule.id}:${date}`))
       .map((date) => ({
         household_id: householdId,
         wallet_id: walletId,

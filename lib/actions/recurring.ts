@@ -148,6 +148,27 @@ export async function convertToRecurring(
 }
 
 /** Edycja pozycji cyklicznej w jednym z trzech zakresow. */
+/**
+ * Wykresla jeden termin z serii, zeby materializacja nie odtworzyla go przy nastepnym renderze.
+ * Uzywane i przy usunieciu pojedynczej raty, i przy przeniesieniu jej na inny dzien.
+ */
+async function skipOccurrence(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  householdId: string,
+  ruleId: string,
+  date: string
+) {
+  // Ten sam termin moze byc wykreslony po raz drugi — to nie blad, a samo "nic nie rob"
+  // zamiast nadpisania: tabela nie ma polityki UPDATE, bo wykreslenia sie nie edytuje.
+  const { error } = await supabase
+    .from("recurring_skips")
+    .upsert({ household_id: householdId, rule_id: ruleId, date }, {
+      onConflict: "rule_id,date",
+      ignoreDuplicates: true,
+    });
+  return error?.message ?? null;
+}
+
 export async function updateRecurringEntry(
   transactionId: string,
   scope: "this" | "future" | "all",
@@ -170,6 +191,12 @@ export async function updateRecurringEntry(
   const { household_id: householdId, wallet_id: walletId, recurring_rule_id: ruleId } = current;
 
   if (scope === "this" || !ruleId) {
+    // Rata przeniesiona na inny dzien zostawia wolny termin — bez wykreslenia wrocilaby tam kopia.
+    if (ruleId && input.date !== current.date) {
+      const skipError = await skipOccurrence(supabase, householdId, ruleId, current.date);
+      if (skipError) return { error: skipError };
+    }
+
     const { error } = await supabase
       .from("transactions")
       .update({
@@ -390,7 +417,7 @@ export async function deleteRecurringEntry(transactionId: string, scope: "this" 
 
   const { data: current } = await supabase
     .from("transactions")
-    .select("id, date, recurring_rule_id")
+    .select("id, household_id, date, recurring_rule_id")
     .eq("id", transactionId)
     .single();
 
@@ -398,6 +425,13 @@ export async function deleteRecurringEntry(transactionId: string, scope: "this" 
   const ruleId = current.recurring_rule_id;
 
   if (scope === "this" || !ruleId) {
+    // Najpierw slad, potem kasowanie: gdyby zapis sladu padl, rata zostaje na liscie,
+    // zamiast zniknac na chwile i wrocic przy najblizszym renderze.
+    if (ruleId) {
+      const skipError = await skipOccurrence(supabase, current.household_id, ruleId, current.date);
+      if (skipError) return { error: skipError };
+    }
+
     const { error } = await supabase.from("transactions").delete().eq("id", transactionId);
     if (error) return { error: error.message };
     revalidatePath("/");

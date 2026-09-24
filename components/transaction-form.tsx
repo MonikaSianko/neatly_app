@@ -25,7 +25,7 @@ import { parseAmountToCents } from "@/lib/format";
 import { useLocale } from "@/components/locale-provider";
 import { useKeyboardInset } from "@/lib/use-keyboard-inset";
 import { useAction } from "@/lib/use-action";
-import { startPendingRow, endPendingRow } from "@/lib/pending-rows";
+import { pendingRows } from "@/lib/pending-signal";
 import { Spinner } from "@/components/ui/spinner";
 import { WEEKDAYS, categoryDisplayName } from "@/lib/i18n";
 
@@ -213,11 +213,11 @@ function TransactionFormFields({
   const announcesNewRow = !editing;
 
   function beginSave() {
-    if (announcesNewRow) startPendingRow();
+    if (announcesNewRow) pendingRows.start();
   }
 
   function failedSave() {
-    if (announcesNewRow) endPendingRow();
+    if (announcesNewRow) pendingRows.end();
   }
 
   const keyboardInset = useKeyboardInset();

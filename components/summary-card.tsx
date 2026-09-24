@@ -1,10 +1,11 @@
 "use client";
 
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { ChevronDown } from "lucide-react";
 import { money } from "@/lib/format";
 import { InfoPopover } from "@/components/note-popover";
 import { useLocale } from "@/components/locale-provider";
+import { pendingSummary } from "@/lib/pending-signal";
 import type { Summary } from "@/lib/summary";
 
 /** Etykieta wartosci z wyjasnieniem, jak jest liczona. */
@@ -25,6 +26,14 @@ function Label({ text, info }: { text: string; info: string }) {
 export function SummaryCard({ summary, opening }: { summary: Summary; opening: ReactNode }) {
   const { locale, t } = useLocale();
   const [open, setOpen] = useState(false);
+  const recalculating = pendingSummary.useCount() > 0;
+
+  // Nowe podsumowanie = liczby sa juz przeliczone, szkielet moze zejsc.
+  useEffect(() => {
+    pendingSummary.clear();
+  }, [summary]);
+
+  if (recalculating) return <SummaryCardSkeleton opening={opening} />;
 
   const rest = [
     { label: t.income, value: summary.income, info: t.incomeInfo, tone: "" },
@@ -113,6 +122,47 @@ export function SummaryCard({ summary, opening }: { summary: Summary; opening: R
         >
           {money(summary.balanceNow, locale)}
         </span>
+      </div>
+    </section>
+  );
+}
+
+/**
+ * Cala karta w oczekiwaniu na przeliczenie. Zmiana stanu poczatkowego albo limitu rusza
+ * wszystkie piec kwot naraz, wiec podmieniamy je razem — pojedyncze liczby aktualizujace
+ * sie jedna po drugiej wygladaja jak blad rachunku.
+ *
+ * Arkusz stanu poczatkowego zostaje w drzewie (tylko schowany): to on prowadzi zapis,
+ * wiec jego odmontowanie zgubiloby komunikat o nieudanej probie.
+ */
+function SummaryCardSkeleton({ opening }: { opening: ReactNode }) {
+  return (
+    <section className="rounded-[14px] border border-border bg-card p-4" aria-busy>
+      <div className="hidden">{opening}</div>
+      <div className="h-5 w-40 animate-pulse rounded bg-muted" />
+
+      <div className="mt-3 flex items-start gap-3 sm:hidden">
+        {Array.from({ length: 2 }, (_, i) => (
+          <div key={i} className="min-w-0 flex-1">
+            <div className="h-3 w-20 animate-pulse rounded bg-muted" />
+            <div className="mt-1.5 h-6 w-24 animate-pulse rounded bg-muted" />
+          </div>
+        ))}
+        <div className="h-10 w-10 shrink-0 animate-pulse rounded-[10px] bg-muted" />
+      </div>
+
+      <div className="mt-3 hidden grid-cols-2 gap-3 sm:grid">
+        {Array.from({ length: 4 }, (_, i) => (
+          <div key={i}>
+            <div className="h-3 w-24 animate-pulse rounded bg-muted" />
+            <div className="mt-1.5 h-6 w-28 animate-pulse rounded bg-muted" />
+          </div>
+        ))}
+      </div>
+
+      <div className="mt-3 hidden items-center justify-between border-t border-border pt-3 sm:flex">
+        <div className="h-3 w-28 animate-pulse rounded bg-muted" />
+        <div className="h-6 w-24 animate-pulse rounded bg-muted" />
       </div>
     </section>
   );

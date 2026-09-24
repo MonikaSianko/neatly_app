@@ -39,7 +39,7 @@ import { paymentStatus } from "@/lib/month";
 import { useLocale } from "@/components/locale-provider";
 import { Spinner } from "@/components/ui/spinner";
 import { useAction } from "@/lib/use-action";
-import { clearPendingRows, endPendingRow, startPendingRow, usePendingRows } from "@/lib/pending-rows";
+import { pendingRows } from "@/lib/pending-signal";
 import { categoryDisplayName } from "@/lib/i18n";
 
 type Category = {
@@ -90,6 +90,9 @@ type SortDir = "asc" | "desc";
  * przy lg (jedna kolumna) dostepne ~990px, przy xl (z panelem bocznym) ~910px.
  */
 const GRID = "grid grid-cols-[28px_1.5fr_1.1fr_96px_92px_116px_120px_32px_32px]";
+
+/** Ile oplaconych pozycji widac bez rozwijania — swieza historia pod reka, reszta schowana. */
+const PAID_PREVIEW = 5;
 
 type DraftRow = {
   key: string;
@@ -145,7 +148,7 @@ export function UpcomingTable({
   // serwera stoi w ich miejscu szkielet, bo pokazywanie starej kwoty myli bardziej niz jej brak.
   const [staleKeys, setStaleKeys] = useState<string[]>([]);
   const [lastRows, setLastRows] = useState(rows);
-  const pendingNewRows = usePendingRows();
+  const pendingNewRows = pendingRows.useCount();
   const [deleteTarget, setDeleteTarget] = useState<UpcomingRow | null>(null);
   const [expandedSplits, setExpandedSplits] = useState<Set<string>>(new Set());
   const { pending, busy, error, run } = useAction();
@@ -160,7 +163,7 @@ export function UpcomingTable({
 
   // Nowy wpis dojechal razem z ta tablica — zapowiedz mozna zdjac.
   useEffect(() => {
-    clearPendingRows();
+    pendingRows.clear();
   }, [rows]);
 
   const categoryById = new Map(categories.map((c) => [c.id, c]));
@@ -358,6 +361,17 @@ export function UpcomingTable({
   const allPaid = toGroups(rows.filter(isPaid));
   const openGroups = allOpen.filter(matches);
   const paidGroups = allPaid.filter(matches);
+  // Oplacone pokazujemy od najswiezszych, niezaleznie od sortowania calej tabeli: liczy sie
+  // to, co zeszlo z konta ostatnio, a nie miejsce pozycji w kolejnosci terminow.
+  const recentPaidKeys = new Set(
+    [...paidGroups]
+      .sort((a, b) => b.head.date.localeCompare(a.head.date) || b.head.created_at.localeCompare(a.head.created_at))
+      .slice(0, PAID_PREVIEW)
+      .map((g) => g.key)
+  );
+  const visiblePaid = showPaid ? paidGroups : paidGroups.filter((g) => recentPaidKeys.has(g.key));
+  const hiddenPaid = paidGroups.length - visiblePaid.length;
+
   const total = allOpen.length + allPaid.length;
   const shown = openGroups.length + paidGroups.length;
   const filtering = query.trim().length > 0;
@@ -377,10 +391,10 @@ export function UpcomingTable({
       isPaid: r.isPaid,
     }));
     // Wiersze robocze znikaja od razu po zapisie, wiec az do odswiezenia trzymaja miejsce szkielety.
-    input.forEach(startPendingRow);
+    input.forEach(() => pendingRows.start());
     run(() => saveDraftRows(householdId, walletId, input), {
       onSuccess: () => setDrafts([]),
-      onError: () => input.forEach(endPendingRow),
+      onError: () => input.forEach(() => pendingRows.end()),
     });
   }
 
@@ -808,22 +822,34 @@ export function UpcomingTable({
 
           {paidGroups.length > 0 && (
             <>
-              <button
-                type="button"
-                onClick={() => setShowPaid(!showPaid)}
-                className="flex w-full items-center gap-2 px-2 py-2.5 text-base text-muted-foreground hover:bg-muted/50"
-                aria-expanded={showPaid}
-              >
-                <ChevronDown
-                  className="h-4 w-4 transition-transform"
-                  style={{ transform: showPaid ? "rotate(180deg)" : undefined }}
-                />
-                <span className="font-medium">
-                  {t.paidSection} ({paidGroups.length})
-                </span>
-                <span className="tabular ml-auto">{money(paidTotal, locale)}</span>
-              </button>
-              {showPaid && paidGroups.map((group) => renderGroup(group, true))}
+              {/* Strzalka rozwija reszte oplaconych; przy pieciu i mniej nie ma czego rozwijac,
+                  wiec naglowek zostaje zwyklym podpisem. */}
+              {hiddenPaid > 0 || showPaid ? (
+                <button
+                  type="button"
+                  onClick={() => setShowPaid(!showPaid)}
+                  className="flex w-full items-center gap-2 px-2 py-2.5 text-base text-muted-foreground hover:bg-muted/50"
+                  aria-expanded={showPaid}
+                >
+                  <ChevronDown
+                    className="h-4 w-4 transition-transform"
+                    style={{ transform: showPaid ? "rotate(180deg)" : undefined }}
+                  />
+                  <span className="font-medium">
+                    {t.paidSection} ({paidGroups.length})
+                  </span>
+                  <span className="tabular ml-auto">{money(paidTotal, locale)}</span>
+                </button>
+              ) : (
+                <div className="flex w-full items-center gap-2 px-2 py-2.5 text-base text-muted-foreground">
+                  <span className="font-medium">
+                    {t.paidSection} ({paidGroups.length})
+                  </span>
+                  <span className="tabular ml-auto">{money(paidTotal, locale)}</span>
+                </div>
+              )}
+
+              {visiblePaid.map((group) => renderGroup(group, true))}
             </>
           )}
 

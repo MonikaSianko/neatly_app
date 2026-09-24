@@ -57,8 +57,21 @@ export function CategoryManager({
   const [kind, setKind] = useState<CategoryKind>("expense");
   const [edit, setEdit] = useState<Draft | null>(null);
   const [showArchived, setShowArchived] = useState(false);
-  // Akcje kategorii same odswiezaja widok przez revalidatePath, wiec nie dokladamy drugiego odswiezenia.
-  const { pending, busy, error, run } = useAction();
+  const { pending, error, run } = useAction();
+  // Kazda akcja przestawia kolejnosc albo sklad listy, wiec do czasu odpowiedzi serwera
+  // zastepuje ja szkielet — inaczej przez moment widac stary uklad jak gdyby nigdy nic.
+  const [refreshing, setRefreshing] = useState(false);
+  const [lastCategories, setLastCategories] = useState(categories);
+
+  if (categories !== lastCategories) {
+    setLastCategories(categories);
+    setRefreshing(false);
+  }
+
+  function runOnList(action: () => Promise<{ error: string | null }>, options: { onSuccess?: () => void } = {}) {
+    setRefreshing(true);
+    run(action, { ...options, onError: () => setRefreshing(false) });
+  }
 
   const list = categories
     .filter((c) => c.kind === kind && !c.is_archived)
@@ -66,26 +79,26 @@ export function CategoryManager({
   const archived = categories.filter((c) => c.kind === kind && c.is_archived);
 
   function move(id: string, direction: -1 | 1) {
-    run(() => reorderCategory(householdId, kind, id, direction), { key: id, refresh: false });
+    runOnList(() => reorderCategory(householdId, kind, id, direction));
   }
 
   function remove(id: string) {
-    run(() => deleteOrArchiveCategory(id), { key: id, refresh: false });
+    runOnList(() => deleteOrArchiveCategory(id));
   }
 
   function restore(id: string) {
-    run(() => restoreCategory(id), { key: id, refresh: false });
+    runOnList(() => restoreCategory(id));
   }
 
   function submitEdit(e: React.FormEvent) {
     e.preventDefault();
     if (!edit) return;
-    run(
+    runOnList(
       () =>
         edit.id
           ? updateCategory(edit.id, { name: edit.name, emoji: edit.emoji, color: edit.color }, locale)
           : createCategory(householdId, list.length, { ...edit, kind }),
-      { key: "form", refresh: false, onSuccess: () => setEdit(null) }
+      { onSuccess: () => setEdit(null) }
     );
   }
 
@@ -122,6 +135,21 @@ export function CategoryManager({
             ))}
           </div>
 
+          {refreshing ? (
+            <div className="rounded-[14px] border border-border" aria-busy>
+              {Array.from({ length: Math.max(1, list.length) }, (_, i) => (
+                <div
+                  key={i}
+                  className={`flex items-center gap-2 px-3 py-2 ${i > 0 ? "border-t border-border" : ""}`}
+                >
+                  <div className="h-2.5 w-2.5 shrink-0 animate-pulse rounded-full bg-muted" />
+                  <div className="h-4 w-4 shrink-0 animate-pulse rounded bg-muted" />
+                  <div className="h-4 flex-1 animate-pulse rounded bg-muted" />
+                  <div className="h-4 w-16 shrink-0 animate-pulse rounded bg-muted" />
+                </div>
+              ))}
+            </div>
+          ) : (
           <div className="rounded-[14px] border border-border">
             {list.map((c, i) => (
               <div
@@ -168,11 +196,12 @@ export function CategoryManager({
                   className="p-1 disabled:opacity-50"
                   style={{ color: "var(--destructive)" }}
                 >
-                  {busy(c.id) ? <Spinner className="h-3.5 w-3.5" /> : <Trash2 className="h-3.5 w-3.5" />}
+                  <Trash2 className="h-3.5 w-3.5" />
                 </button>
               </div>
             ))}
           </div>
+          )}
 
           <button
             type="button"
@@ -209,7 +238,7 @@ export function CategoryManager({
                         className="flex items-center gap-1 p-1 text-sm disabled:opacity-50"
                         style={{ color: "var(--neatly-primary-dark)" }}
                       >
-                        {busy(c.id) ? <Spinner className="h-3.5 w-3.5" /> : <RotateCcw className="h-3.5 w-3.5" />}
+                        <RotateCcw className="h-3.5 w-3.5" />
                         {t.restore}
                       </button>
                     </div>
@@ -267,7 +296,7 @@ export function CategoryManager({
                   className="flex flex-1 items-center justify-center gap-2 rounded-[10px] px-4 py-2 text-base font-medium text-primary-foreground disabled:opacity-50"
                   style={{ background: "var(--primary)" }}
                 >
-                  {busy("form") && <Spinner />}
+                  {pending && <Spinner />}
                   {t.saveCategory}
                 </button>
                 <button
