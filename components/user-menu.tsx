@@ -1,8 +1,8 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { useRouter } from "next/navigation";
-import { Check, Home, Languages, LogOut, Tags, UserRound } from "lucide-react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { Check, ChartPie, Home, Languages, LogOut, Menu, Tags } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -40,6 +40,7 @@ export function UserMenu({
   categories: Category[];
 }) {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { locale, t, setLocale } = useLocale();
   const [categoriesOpen, setCategoriesOpen] = useState(false);
   const [sheetOpen, setSheetOpen] = useState(false);
@@ -47,6 +48,12 @@ export function UserMenu({
   // Wylogowanie konczy sie przeniesieniem na /login, wiec przycisk musi pokazac, ze juz dziala.
   const [loggingOut, startLogout] = useTransition();
   usePendingSignal(loggingOut);
+
+  /** Miesiac jedzie razem z przejsciem — inaczej z wrzesnia trafialoby sie na biezacy. */
+  function goToSummary() {
+    const month = searchParams.get("month");
+    router.push(month ? `/summary?month=${month}` : "/summary");
+  }
 
   function logout() {
     startLogout(async () => {
@@ -60,10 +67,10 @@ export function UserMenu({
   const trigger = (
     <button
       type="button"
-      aria-label={t.account}
+      aria-label={t.menu}
       className="tap-target flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-muted-foreground hover:bg-muted"
     >
-      <UserRound className="h-5 w-5" />
+      <Menu className="h-5 w-5" />
     </button>
   );
 
@@ -79,6 +86,17 @@ export function UserMenu({
               </SheetHeader>
 
               <nav className="flex flex-col px-2 pb-3">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSheetOpen(false);
+                    goToSummary();
+                  }}
+                  className="flex min-h-12 items-center gap-3 rounded-[10px] px-3 text-left text-[17px] active:bg-muted"
+                >
+                  <ChartPie className="h-5 w-5 text-muted-foreground" />
+                  {t.monthSummary}
+                </button>
                 <button
                   type="button"
                   onClick={() => {
@@ -146,6 +164,10 @@ export function UserMenu({
               </DropdownMenuLabel>
             )}
             <DropdownMenuSeparator />
+            <DropdownMenuItem onClick={goToSummary}>
+              <ChartPie className="h-4 w-4" />
+              {t.monthSummary}
+            </DropdownMenuItem>
             <DropdownMenuItem onClick={() => setCategoriesOpen(true)}>
               <Tags className="h-4 w-4" />
               {t.categories}

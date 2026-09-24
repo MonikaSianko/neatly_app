@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { computeSummary, categoryContribution, categorySpent } from "./summary";
+import { computeSummary, categoryContribution, categorySpent, sumSummaries, categoryTotals } from "./summary";
 
 const groceries = "cat-groceries";
 const car = "cat-car";
@@ -154,5 +154,54 @@ describe("zwroty", () => {
     const summary = computeSummary([ramen, { ...asia, amount_cents: 30000 }], [], 0);
     expect(categorySpent([ramen, { ...asia, amount_cents: 30000 }], eatingOut)).toBe(-6600);
     expect(summary.balanceNow).toBe(6600);
+  });
+});
+
+describe("wiele portfeli", () => {
+  const groceriesTx = { kind: "expense" as const, amount_cents: 30000, is_paid: true, category_id: groceries };
+  const salaryTx = { kind: "income" as const, amount_cents: 500000, is_paid: true, category_id: salary };
+
+  it("calosc jest suma portfeli, nie osobnym rachunkiem", () => {
+    // Ten sam budzet w dwoch portfelach: kazdy rezerwuje swoj limit.
+    const walletA = computeSummary([groceriesTx], [{ category_id: groceries, amount_cents: 250000 }], 100000);
+    const walletB = computeSummary([salaryTx], [], 0);
+    const total = sumSummaries([walletA, walletB]);
+
+    expect(total.opening).toBe(100000);
+    expect(total.income).toBe(500000);
+    expect(total.plannedExpenses).toBe(250000);
+    expect(total.balanceWithBudgets).toBe(walletA.balanceWithBudgets + walletB.balanceWithBudgets);
+    expect(total.accountBalance).toBe(walletA.accountBalance + walletB.accountBalance);
+  });
+
+  it("pusta lista portfeli daje zera", () => {
+    expect(sumSummaries([])).toMatchObject({ income: 0, plannedExpenses: 0, accountBalance: 0 });
+  });
+});
+
+describe("categoryTotals", () => {
+  const eatingOut = "cat-eating-out";
+
+  it("sumuje wydatki i limity po kategoriach, malejaco", () => {
+    const tx = [
+      { kind: "expense" as const, amount_cents: 23400, is_paid: true, category_id: eatingOut },
+      { kind: "income" as const, amount_cents: 14700, is_paid: true, category_id: eatingOut, is_refund: true },
+      { kind: "expense" as const, amount_cents: 50000, is_paid: false, category_id: groceries },
+      { kind: "income" as const, amount_cents: 900000, is_paid: true, category_id: salary },
+    ];
+    // Ta sama kategoria z limitem w dwoch portfelach.
+    const budgets = [
+      { category_id: groceries, amount_cents: 200000 },
+      { category_id: groceries, amount_cents: 50000 },
+    ];
+
+    const totals = categoryTotals(tx, budgets);
+
+    expect(totals.map((r) => r.categoryId)).toEqual([groceries, eatingOut]);
+    expect(totals[0]).toMatchObject({ spent: 50000, budget: 250000 });
+    // Zwrot pomniejsza kategorie: 234,00 - 147,00.
+    expect(totals[1]).toMatchObject({ spent: 8700, budget: 0 });
+    // Przychod nie jest kategoria wydatkowa.
+    expect(totals.some((r) => r.categoryId === salary)).toBe(false);
   });
 });

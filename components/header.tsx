@@ -14,6 +14,7 @@ export function Header({
   categories,
   email,
   ym,
+  showWalletSwitcher = true,
 }: {
   wallets: Wallet[];
   activeWalletId: string;
@@ -21,6 +22,8 @@ export function Header({
   categories: Category[];
   email: string | null;
   ym: YearMonth;
+  /** Podsumowanie zbiorcze stoi ponad portfelami, wiec tam przelacznik nie ma czego przelaczac. */
+  showWalletSwitcher?: boolean;
 }) {
   return (
     <header className="sticky top-0 z-10 border-b border-border bg-background">
@@ -30,7 +33,9 @@ export function Header({
           <span className="hidden text-base font-medium sm:inline">Neatly</span>
         </Link>
 
-        <WalletSwitcher wallets={wallets} activeWalletId={activeWalletId} householdId={householdId} />
+        {showWalletSwitcher && (
+          <WalletSwitcher wallets={wallets} activeWalletId={activeWalletId} householdId={householdId} />
+        )}
 
         <div className="flex flex-1 items-center justify-center">
           <MonthNav ym={ym} />

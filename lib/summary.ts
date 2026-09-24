@@ -101,3 +101,56 @@ export function computeSummary(
     balanceNow: income - actualExpenses,
   };
 }
+
+/**
+ * Podsumowanie wielu portfeli. Kazda pozycja Summary jest addytywna, wiec calosc liczymy
+ * jako sume podsumowan poszczegolnych portfeli — nie przez wrzucenie wszystkich transakcji
+ * do jednego worka. To roznica, ktora widac w liczbach: wklad kategorii to max(budzet, wydatki),
+ * a ta reguła obowiazuje w obrebie portfela. Dzieki sumowaniu ekran zbiorczy zawsze zgadza sie
+ * z suma ekranow pojedynczych portfeli, a to pierwsze, co ktokolwiek sprawdzi.
+ */
+export function sumSummaries(parts: Summary[]): Summary {
+  return parts.reduce<Summary>(
+    (total, part) => ({
+      income: total.income + part.income,
+      plannedExpenses: total.plannedExpenses + part.plannedExpenses,
+      actualExpenses: total.actualExpenses + part.actualExpenses,
+      paidIn: total.paidIn + part.paidIn,
+      paidOut: total.paidOut + part.paidOut,
+      opening: total.opening + part.opening,
+      accountBalance: total.accountBalance + part.accountBalance,
+      balanceWithBudgets: total.balanceWithBudgets + part.balanceWithBudgets,
+      balanceNow: total.balanceNow + part.balanceNow,
+    }),
+    { income: 0, plannedExpenses: 0, actualExpenses: 0, paidIn: 0, paidOut: 0, opening: 0, accountBalance: 0, balanceWithBudgets: 0, balanceNow: 0 }
+  );
+}
+
+export type CategoryTotal = {
+  categoryId: string;
+  /** Wydatki pomniejszone o zwroty — suma ze wszystkich portfeli. */
+  spent: number;
+  /** Suma limitow z wszystkich portfeli; 0 = kategoria bez budzetu. */
+  budget: number;
+};
+
+/**
+ * Ile poszlo na kazda kategorie w calym gospodarstwie. Wydatki i limity sa addytywne miedzy
+ * portfelami, wiec tu wystarczy plaska lista. Posortowane malejaco — wykres i lista czytaja
+ * sie od najwiekszej pozycji.
+ */
+export function categoryTotals(transactions: SummaryTransaction[], budgets: SummaryBudget[]): CategoryTotal[] {
+  const ids = new Set<string>([
+    ...transactions.filter((t) => t.kind === "expense" || t.is_refund).map((t) => t.category_id),
+    ...budgets.map((b) => b.category_id),
+  ]);
+
+  return [...ids]
+    .map((categoryId) => ({
+      categoryId,
+      spent: categorySpent(transactions, categoryId),
+      budget: budgets.filter((b) => b.category_id === categoryId).reduce((sum, b) => sum + b.amount_cents, 0),
+    }))
+    .filter((row) => row.spent !== 0 || row.budget > 0)
+    .sort((a, b) => b.spent - a.spent);
+}
