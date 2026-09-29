@@ -1,17 +1,24 @@
 import { CategoryDonut, type DonutSlice } from "@/components/category-donut";
 import { createClient } from "@/lib/supabase/server";
 import { monthRange, isoToday, type YearMonth } from "@/lib/month";
-import { computeSummary, sumSummaries, categoryTotals } from "@/lib/summary";
+import { computeSummary, sumSummaries, categoryTotals, incomeByCategory } from "@/lib/summary";
 import { ensureMonthMaterialized, settleAutomaticPayments } from "@/lib/materialize";
 import { money } from "@/lib/format";
-import { t as translate, categoryDisplayName, type Locale } from "@/lib/i18n";
+import { t as translate, categoryDisplayName, type Locale, type Dict } from "@/lib/i18n";
 
 type Category = { id: string; name: string; name_en: string | null; emoji: string; color: string };
 type Wallet = { id: string; name: string; emoji: string | null };
 
-/** Ile kategorii pokazuje wykres, zanim reszta zejdzie do jednego wiersza "Pozostałe". */
-const TOP_CATEGORIES = 8;
-const REST_COLOR = "var(--muted-foreground)";
+/** Wiersz listy kategorii — wspolny ksztalt dla wydatkow i przychodow. */
+type CategoryRow = {
+  id: string;
+  name: string;
+  emoji: string;
+  color: string;
+  amount: number;
+  /** Suma limitow ze wszystkich portfeli; 0 = kategoria bez budzetu (przychody nie maja go nigdy). */
+  budget: number;
+};
 
 /**
  * Podsumowanie miesiaca ponad portfelami. Osobny komponent, zeby strona mogla owinac go
@@ -80,34 +87,26 @@ export async function SummaryContent({
   const total = sumSummaries(perWallet.map((p) => p.summary));
   const categoryById = new Map(categories.map((c) => [c.id, c]));
 
-  const totals = categoryTotals(monthTx, monthBudgets).filter((row) => categoryById.has(row.categoryId));
-  const top = totals.slice(0, TOP_CATEGORIES);
-  const rest = totals.slice(TOP_CATEGORIES);
-  const restSpent = rest.reduce((sum, row) => sum + row.spent, 0);
-  // Kategoria na minusie (zwroty wieksze od wydatkow) nie ma wycinka, ale zostaje na liscie
-  // ze swoja prawdziwa kwota — udzial liczymy z tego, co naprawde wyszlo z domu.
-  const chartTotal = totals.reduce((sum, row) => sum + Math.max(0, row.spent), 0);
-
-  const nameOf = (id: string) => {
-    const cat = categoryById.get(id);
-    return cat ? categoryDisplayName(cat.name, locale, cat.name_en) : "";
-  };
-  const percent = (value: number) => {
-    const share = chartTotal > 0 ? (Math.max(0, value) / chartTotal) * 100 : 0;
-    return `${share.toFixed(1).replace(".", ",")}%`;
+  const toRow = (categoryId: string, amount: number, budget: number): CategoryRow | null => {
+    const cat = categoryById.get(categoryId);
+    if (!cat) return null;
+    return {
+      id: cat.id,
+      name: categoryDisplayName(cat.name, locale, cat.name_en),
+      emoji: cat.emoji,
+      color: cat.color,
+      amount,
+      budget,
+    };
   };
 
-  const slices: DonutSlice[] = [
-    ...top
-      .filter((row) => row.spent > 0)
-      .map((row) => ({
-        id: row.categoryId,
-        label: nameOf(row.categoryId),
-        value: row.spent,
-        color: categoryById.get(row.categoryId)?.color ?? REST_COLOR,
-      })),
-    ...(restSpent > 0 ? [{ id: "rest", label: t.otherCategories, value: restSpent, color: REST_COLOR }] : []),
-  ];
+  const expenseRows = categoryTotals(monthTx, monthBudgets)
+    .map((row) => toRow(row.categoryId, row.spent, row.budget))
+    .filter((row): row is CategoryRow => row !== null);
+
+  const incomeRows = incomeByCategory(monthTx)
+    .map((row) => toRow(row.categoryId, row.amount, 0))
+    .filter((row): row is CategoryRow => row !== null);
 
   if (monthTx.length === 0) {
     return (
@@ -117,7 +116,9 @@ export async function SummaryContent({
     );
   }
 
-  const paidShare = total.plannedExpenses > 0 ? Math.min(100, (total.paidOut / total.plannedExpenses) * 100) : 0;
+  // Pasek postepu porownuje oplacone z tym, co naprawde wpisano — nie z planem, bo plan
+  // zawiera jeszcze nietkniete limity budzetow i nigdy nie doszedlby do stu procent.
+  const paidShare = total.actualExpenses > 0 ? Math.min(100, (total.paidOut / total.actualExpenses) * 100) : 0;
 
   return (
     <>
@@ -136,20 +137,16 @@ export async function SummaryContent({
             </div>
           </div>
 
+          {/* Tylko fakty: pozycje, ktore juz przeszly przez konto. Plan miesiaca stoi
+              przy kategoriach, gdzie porownuje sie go z limitami. */}
           <div className="mt-4 grid grid-cols-2 gap-4 xl:grid-cols-1">
-            <Amount label={t.income} hint={t.incomePlanned} value={money(total.income, locale)} tone="success" />
-            <Amount label={t.plannedExpenses} hint={t.withBudgetLimits} value={money(total.plannedExpenses, locale)} />
-            <Amount
-              label={t.balanceWithBudgets}
-              hint={t.incomeMinusExpenses}
-              value={money(total.balanceWithBudgets, locale)}
-              tone={total.balanceWithBudgets < 0 ? "danger" : "success"}
-            />
+            <Amount label={t.income} hint={t.receivedHint} value={money(total.paidIn, locale)} tone="success" />
+            <Amount label={t.expenses} hint={t.paidItemsHint} value={money(total.paidOut, locale)} />
             <Amount
               label={t.balanceNow}
-              hint={t.paidOnly}
-              value={money(total.balanceNow, locale)}
-              tone={total.balanceNow < 0 ? "danger" : "success"}
+              hint={t.flowHint}
+              value={money(total.paidIn - total.paidOut, locale)}
+              tone={total.paidIn - total.paidOut < 0 ? "danger" : "success"}
             />
           </div>
 
@@ -162,104 +159,31 @@ export async function SummaryContent({
               <div className="h-1.5 rounded-full" style={{ width: `${paidShare}%`, background: "var(--primary)" }} />
             </div>
             <div className="tabular mt-2 text-xs text-muted-foreground">
-              {money(total.paidOut, locale)} / {money(total.plannedExpenses, locale)}
+              {money(total.paidOut, locale)} / {money(total.actualExpenses, locale)}
             </div>
           </div>
         </section>
       </aside>
 
       <div className="order-2 flex flex-col gap-4 xl:order-1">
-        <section className="rounded-[14px] border border-border bg-card p-4 sm:p-5">
-          <div className="mb-4 flex items-baseline gap-2">
-            <h2 className="text-base font-medium">{t.expensesByCategory}</h2>
-            {rest.length > 0 && (
-              <span className="text-sm text-muted-foreground">
-                {t.topOf} {totals.length} {t.categoriesOf}
-              </span>
-            )}
-          </div>
+        <CategorySection
+          title={t.expensesByCategory}
+          centerLabel={t.expenses}
+          rows={expenseRows}
+          locale={locale}
+          t={t}
+          withBudgets
+        />
 
-          <div className="flex flex-col items-center gap-6 lg:flex-row lg:items-start lg:gap-8">
-            <CategoryDonut
-              slices={slices}
-              label={`${t.expensesByCategory}: ${slices
-                .map((s) => `${s.label} ${money(s.value, locale)}`)
-                .join(", ")}`}
-              centerLabel={t.plannedExpenses}
-              centerValue={money(total.plannedExpenses, locale)}
-              centerHint={`${totals.length} ${t.categoriesOf}`}
-            />
-
-            <ul className="flex w-full min-w-0 flex-col gap-3.5">
-              {top.map((row) => {
-                const cat = categoryById.get(row.categoryId);
-                const over = row.budget > 0 && row.spent > row.budget;
-                const used = row.budget > 0 ? Math.max(0, Math.min(100, (row.spent / row.budget) * 100)) : 0;
-                return (
-                  <li key={row.categoryId} className="flex flex-col gap-1.5">
-                    <div className="flex items-center gap-2.5">
-                      <span aria-hidden className="w-5 shrink-0 text-center">
-                        {cat?.emoji}
-                      </span>
-                      <span className="min-w-0 flex-1 truncate text-base font-medium">{nameOf(row.categoryId)}</span>
-                      <span className="tabular shrink-0 text-base font-medium">{money(row.spent, locale)}</span>
-                      <span className="tabular w-14 shrink-0 text-right text-sm text-muted-foreground">
-                        {percent(row.spent)}
-                      </span>
-                    </div>
-
-                    <div className="flex items-center gap-2.5">
-                      <span className="w-5 shrink-0" />
-                      <div className="h-1.5 min-w-0 flex-1 rounded-full bg-muted">
-                        {row.budget > 0 && (
-                          <div
-                            className="h-1.5 rounded-full"
-                            style={{ width: `${used}%`, background: over ? "var(--destructive)" : cat?.color }}
-                          />
-                        )}
-                      </div>
-                      <span
-                        className="tabular shrink-0 text-xs"
-                        style={{ color: over ? "var(--destructive)" : "var(--muted-foreground)" }}
-                      >
-                        {row.budget === 0
-                          ? t.noLimit
-                          : over
-                            ? `${t.overByShort} ${money(row.spent - row.budget, locale)}`
-                            : `${money(row.spent, locale)} / ${money(row.budget, locale)}`}
-                      </span>
-                    </div>
-                  </li>
-                );
-              })}
-
-              {rest.length > 0 && (
-                <li className="flex flex-col gap-1.5 border-t border-border pt-3">
-                  <div className="flex items-center gap-2.5">
-                    <span aria-hidden className="flex w-5 shrink-0 justify-center">
-                      <span className="h-2.5 w-2.5 rounded-full" style={{ background: REST_COLOR }} />
-                    </span>
-                    <span className="min-w-0 flex-1 truncate text-base font-medium text-muted-foreground">
-                      {t.otherCategories} ({rest.length})
-                    </span>
-                    <span className="tabular shrink-0 text-base font-medium text-muted-foreground">
-                      {money(restSpent, locale)}
-                    </span>
-                    <span className="tabular w-14 shrink-0 text-right text-sm text-muted-foreground">
-                      {percent(restSpent)}
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-2.5">
-                    <span className="w-5 shrink-0" />
-                    <span className="min-w-0 flex-1 truncate text-xs text-muted-foreground">
-                      {rest.map((row) => nameOf(row.categoryId)).join(", ")}
-                    </span>
-                  </div>
-                </li>
-              )}
-            </ul>
-          </div>
-        </section>
+        {incomeRows.length > 0 && (
+          <CategorySection
+            title={t.incomeByCategory}
+            centerLabel={t.income}
+            rows={incomeRows}
+            locale={locale}
+            t={t}
+          />
+        )}
 
         {wallets.length > 1 && (
           <section className="rounded-[14px] border border-border bg-card p-4 sm:p-5">
@@ -272,47 +196,47 @@ export async function SummaryContent({
               <span className="text-right">{t.balanceNow}</span>
             </div>
 
-            {perWallet.map(({ wallet, summary }) => (
-              <div
-                key={wallet.id}
-                className="flex flex-col gap-1 border-b border-border py-3 sm:grid sm:grid-cols-[1.4fr_1fr_1fr_1fr] sm:items-center sm:gap-3"
-              >
-                <span className="flex min-w-0 items-center gap-2 text-base font-medium">
-                  <span aria-hidden className="shrink-0">
-                    {wallet.emoji}
+            {perWallet.map(({ wallet, summary }) => {
+              const flow = summary.paidIn - summary.paidOut;
+              return (
+                <div
+                  key={wallet.id}
+                  className="flex flex-col gap-1 border-b border-border py-3 sm:grid sm:grid-cols-[1.4fr_1fr_1fr_1fr] sm:items-center sm:gap-3"
+                >
+                  <span className="flex min-w-0 items-center gap-2 text-base font-medium">
+                    <span aria-hidden className="shrink-0">
+                      {wallet.emoji}
+                    </span>
+                    <span className="min-w-0 flex-1 truncate">{wallet.name}</span>
+                    <Balance value={flow} locale={locale} className="tabular shrink-0 sm:hidden" />
                   </span>
-                  <span className="min-w-0 flex-1 truncate">{wallet.name}</span>
-                  <Balance value={summary.balanceNow} locale={locale} className="tabular shrink-0 sm:hidden" />
-                </span>
 
-                {/* Na telefonie obie kwoty mieszcza sie w jednej linii pod nazwa portfela. */}
-                <span className="tabular text-sm text-muted-foreground sm:hidden">
-                  {t.expenses}: {money(summary.actualExpenses, locale)} · {t.income}:{" "}
-                  {money(summary.income, locale)}
-                </span>
+                  {/* Na telefonie obie kwoty mieszcza sie w jednej linii pod nazwa portfela. */}
+                  <span className="tabular text-sm text-muted-foreground sm:hidden">
+                    {t.expenses}: {money(summary.paidOut, locale)} · {t.income}: {money(summary.paidIn, locale)}
+                  </span>
 
-                <span className="tabular hidden text-right text-base sm:block">
-                  {money(summary.actualExpenses, locale)}
-                </span>
-                <span className="tabular hidden text-right text-base sm:block">{money(summary.income, locale)}</span>
-                <Balance
-                  value={summary.balanceNow}
-                  locale={locale}
-                  className="tabular hidden text-right text-base font-medium sm:block"
-                />
-              </div>
-            ))}
+                  <span className="tabular hidden text-right text-base sm:block">
+                    {money(summary.paidOut, locale)}
+                  </span>
+                  <span className="tabular hidden text-right text-base sm:block">
+                    {money(summary.paidIn, locale)}
+                  </span>
+                  <Balance value={flow} locale={locale} className="tabular hidden text-right text-base font-medium sm:block" />
+                </div>
+              );
+            })}
 
             <div className="grid grid-cols-2 gap-3 pt-3 sm:grid-cols-[1.4fr_1fr_1fr_1fr]">
               <span className="text-base font-semibold">{t.grandTotal}</span>
               <span className="tabular hidden text-right text-base font-semibold sm:block">
-                {money(total.actualExpenses, locale)}
+                {money(total.paidOut, locale)}
               </span>
               <span className="tabular hidden text-right text-base font-semibold sm:block">
-                {money(total.income, locale)}
+                {money(total.paidIn, locale)}
               </span>
               <Balance
-                value={total.balanceNow}
+                value={total.paidIn - total.paidOut}
                 locale={locale}
                 className="tabular text-right text-base font-semibold"
               />
@@ -321,6 +245,105 @@ export async function SummaryContent({
         )}
       </div>
     </>
+  );
+}
+
+/**
+ * Pierscien i pelna lista kategorii. Wszystkie kategorie z pozycjami wchodza na liste
+ * w calosci — zamiast wiersza zbiorczego lista ma wlasne przewijanie, zeby dwadziescia
+ * kategorii nie rozpychalo strony.
+ */
+function CategorySection({
+  title,
+  centerLabel,
+  rows,
+  locale,
+  t,
+  withBudgets = false,
+}: {
+  title: string;
+  centerLabel: string;
+  rows: CategoryRow[];
+  locale: Locale;
+  t: Dict;
+  withBudgets?: boolean;
+}) {
+  // Kategoria na minusie (zwroty wieksze od wydatkow) nie ma wycinka, ale zostaje na liscie
+  // ze swoja prawdziwa kwota — udzial liczymy z tego, co naprawde wyszlo z domu.
+  const chartTotal = rows.reduce((sum, row) => sum + Math.max(0, row.amount), 0);
+  const slices: DonutSlice[] = rows
+    .filter((row) => row.amount > 0)
+    .map((row) => ({ id: row.id, label: row.name, value: row.amount, color: row.color }));
+
+  const percent = (value: number) => {
+    const share = chartTotal > 0 ? (Math.max(0, value) / chartTotal) * 100 : 0;
+    return `${share.toFixed(1).replace(".", ",")}%`;
+  };
+
+  return (
+    <section className="rounded-[14px] border border-border bg-card p-4 sm:p-5">
+      <div className="mb-4 flex items-baseline gap-2">
+        <h2 className="text-base font-medium">{title}</h2>
+        <span className="text-sm text-muted-foreground">
+          {rows.length} {t.categoriesOf}
+        </span>
+      </div>
+
+      <div className="flex flex-col items-center gap-6 lg:flex-row lg:items-start lg:gap-8">
+        <CategoryDonut
+          slices={slices}
+          label={`${title}: ${slices.map((s) => `${s.label} ${money(s.value, locale)}`).join(", ")}`}
+          centerLabel={centerLabel}
+          centerValue={money(chartTotal, locale)}
+          centerHint={`${rows.length} ${t.categoriesOf}`}
+        />
+
+        <ul className="flex max-h-80 w-full min-w-0 flex-col gap-3.5 overflow-y-auto overscroll-contain pr-1">
+          {rows.map((row) => {
+            const over = row.budget > 0 && row.amount > row.budget;
+            const used = row.budget > 0 ? Math.max(0, Math.min(100, (row.amount / row.budget) * 100)) : 0;
+            return (
+              <li key={row.id} className="flex flex-col gap-1.5">
+                <div className="flex items-center gap-2.5">
+                  <span aria-hidden className="w-5 shrink-0 text-center">
+                    {row.emoji}
+                  </span>
+                  <span className="min-w-0 flex-1 truncate text-base font-medium">{row.name}</span>
+                  <span className="tabular shrink-0 text-base font-medium">{money(row.amount, locale)}</span>
+                  <span className="tabular w-14 shrink-0 text-right text-sm text-muted-foreground">
+                    {percent(row.amount)}
+                  </span>
+                </div>
+
+                {withBudgets && (
+                  <div className="flex items-center gap-2.5">
+                    <span className="w-5 shrink-0" />
+                    <div className="h-1.5 min-w-0 flex-1 rounded-full bg-muted">
+                      {row.budget > 0 && (
+                        <div
+                          className="h-1.5 rounded-full"
+                          style={{ width: `${used}%`, background: over ? "var(--destructive)" : row.color }}
+                        />
+                      )}
+                    </div>
+                    <span
+                      className="tabular shrink-0 text-xs"
+                      style={{ color: over ? "var(--destructive)" : "var(--muted-foreground)" }}
+                    >
+                      {row.budget === 0
+                        ? t.noLimit
+                        : over
+                          ? `${t.overByShort} ${money(row.amount - row.budget, locale)}`
+                          : `${money(row.amount, locale)} / ${money(row.budget, locale)}`}
+                    </span>
+                  </div>
+                )}
+              </li>
+            );
+          })}
+        </ul>
+      </div>
+    </section>
   );
 }
 

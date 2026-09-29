@@ -154,3 +154,22 @@ export function categoryTotals(transactions: SummaryTransaction[], budgets: Summ
     .filter((row) => row.spent !== 0 || row.budget > 0)
     .sort((a, b) => b.spent - a.spent);
 }
+
+export type CategoryAmount = { categoryId: string; amount: number };
+
+/**
+ * Przychody per kategoria, malejaco. Zwroty sie tu nie licza — siedza w kategorii wydatku,
+ * ktory pomniejszaja, wiec doliczenie ich tutaj pokazaloby te same pieniadze dwa razy.
+ */
+export function incomeByCategory(transactions: SummaryTransaction[]): CategoryAmount[] {
+  const rows = transactions.filter(isPlainIncome);
+  const ids = new Set(rows.map((t) => t.category_id));
+
+  return [...ids]
+    .map((categoryId) => ({
+      categoryId,
+      amount: sum(rows.filter((t) => t.category_id === categoryId)),
+    }))
+    .filter((row) => row.amount !== 0)
+    .sort((a, b) => b.amount - a.amount);
+}

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { computeSummary, categoryContribution, categorySpent, sumSummaries, categoryTotals } from "./summary";
+import { computeSummary, categoryContribution, categorySpent, sumSummaries, categoryTotals, incomeByCategory } from "./summary";
 
 const groceries = "cat-groceries";
 const car = "cat-car";
@@ -203,5 +203,25 @@ describe("categoryTotals", () => {
     expect(totals[1]).toMatchObject({ spent: 8700, budget: 0 });
     // Przychod nie jest kategoria wydatkowa.
     expect(totals.some((r) => r.categoryId === salary)).toBe(false);
+  });
+});
+
+describe("incomeByCategory", () => {
+  const gifts = "cat-gifts";
+
+  it("sumuje przychody po kategoriach i pomija zwroty", () => {
+    const tx = [
+      { kind: "income" as const, amount_cents: 900000, is_paid: true, category_id: salary },
+      { kind: "income" as const, amount_cents: 20000, is_paid: false, category_id: gifts },
+      { kind: "income" as const, amount_cents: 14700, is_paid: true, category_id: groceries, is_refund: true },
+      { kind: "expense" as const, amount_cents: 23400, is_paid: true, category_id: groceries },
+    ];
+
+    const rows = incomeByCategory(tx);
+
+    expect(rows).toEqual([
+      { categoryId: salary, amount: 900000 },
+      { categoryId: gifts, amount: 20000 },
+    ]);
   });
 });
