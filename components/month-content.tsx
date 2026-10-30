@@ -34,6 +34,7 @@ export async function MonthContent({
   locale,
   categories,
   activeTab,
+  defaultDate,
 }: {
   householdId: string;
   walletId: string;
@@ -41,6 +42,8 @@ export async function MonthContent({
   locale: Locale;
   categories: Category[];
   activeTab: "upcoming" | "expense" | "income";
+  /** Data nowego wpisu, liczona raz na strone — ten sam domysl ma przycisk "+" i wiersze robocze. */
+  defaultDate: string;
 }) {
   const supabase = await createClient();
   const dict = translate(locale);
@@ -168,7 +171,6 @@ export async function MonthContent({
     }
   }
 
-  const defaultDate = ym.y === Number(today.slice(0, 4)) && ym.m === Number(today.slice(5, 7)) ? today : range.from;
   const expenseCategories = categories.filter((c) => c.kind === "expense" && !c.is_archived);
   // Zakladka Platnosci pokazuje caly miesiac; podzial na oplacone/nieoplacone i sortowanie robi klient.
   const paymentRows = monthTx;

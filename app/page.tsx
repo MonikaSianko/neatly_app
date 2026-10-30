@@ -109,6 +109,7 @@ export default async function Home({
             locale={locale}
             categories={categories ?? []}
             activeTab={activeTab}
+            defaultDate={defaultDate}
           />
         </Suspense>
       </main>
