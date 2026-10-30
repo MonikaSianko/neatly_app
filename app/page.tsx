@@ -53,7 +53,31 @@ export default async function Home({
 
   const today = isoToday();
   const range = monthRange(ym);
-  const defaultDate = ym.y === Number(today.slice(0, 4)) && ym.m === Number(today.slice(5, 7)) ? today : range.from;
+
+  /**
+   * Nowy wpis dziedziczy date ostatniej oplaconej pozycji — przy przepisywaniu wyciagu
+   * kolejne pozycje maja zwykle te sama albo bliska date, wiec to oszczedza klikania.
+   *
+   * Szukamy tylko w ogladanym miesiacu: data z innego miesiaca wypchnelaby swiezy wpis
+   * poza widok, w ktorym sie go dodaje. Gdy nic nie jest jeszcze oplacone, zostaje
+   * dotychczasowa regula — dzis w biezacym miesiacu, pierwszy dzien w kazdym innym.
+   */
+  const { data: lastPaid } = activeWalletId
+    ? await supabase
+        .from("transactions")
+        .select("date")
+        .eq("household_id", householdId)
+        .eq("wallet_id", activeWalletId)
+        .eq("is_paid", true)
+        .gte("date", range.from)
+        .lte("date", range.to)
+        .order("date", { ascending: false })
+        .limit(1)
+        .maybeSingle()
+    : { data: null };
+
+  const monthDefault = ym.y === Number(today.slice(0, 4)) && ym.m === Number(today.slice(5, 7)) ? today : range.from;
+  const defaultDate = lastPaid?.date ?? monthDefault;
 
   return (
     <>
