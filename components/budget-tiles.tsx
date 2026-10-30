@@ -85,12 +85,12 @@ export function BudgetTiles({
 
   return (
     <section className="rounded-[14px] border border-border bg-card p-4">
-      <div className="mb-3 flex items-center justify-between">
-        <h2 className="text-base font-medium">{t.budgets}</h2>
+      <div className="mb-3 flex items-center justify-between gap-2">
+        <h2 className="min-w-0 text-base font-medium">{t.budgets}</h2>
         <button
           type="button"
           onClick={() => setEdit({ id: null, categoryId: "", amount: "" })}
-          className="rounded-[10px] border border-border px-2.5 py-1 text-sm font-medium hover:bg-muted"
+          className="shrink-0 rounded-[10px] border border-border px-2.5 py-1 text-sm font-medium whitespace-nowrap hover:bg-muted"
         >
           {t.setBudget}
         </button>
@@ -100,12 +100,12 @@ export function BudgetTiles({
         <div className="flex flex-col gap-3" aria-busy>
           {Array.from({ length: Math.max(1, rows.length) }, (_, i) => (
             <div key={i} className="rounded-[10px] border border-border p-3">
-              <div className="flex items-center justify-between gap-2">
-                <div className="h-4 w-32 animate-pulse rounded bg-muted" />
-                <div className="h-4 w-24 animate-pulse rounded bg-muted" />
-              </div>
+              <div className="h-4 w-32 animate-pulse rounded bg-muted" />
               <div className="mt-2 h-2 w-full animate-pulse rounded-full bg-muted" />
-              <div className="mt-1 h-3 w-20 animate-pulse rounded bg-muted" />
+              <div className="mt-1 flex items-center justify-between gap-2">
+                <div className="h-3 w-28 animate-pulse rounded bg-muted" />
+                <div className="h-3 w-20 animate-pulse rounded bg-muted" />
+              </div>
             </div>
           ))}
         </div>
@@ -142,14 +142,11 @@ export function BudgetTiles({
                 }
                 className="rounded-[10px] border border-border p-3 text-left"
               >
-                <div className="flex items-center justify-between gap-2 text-base">
-                  <span className="flex min-w-0 items-center gap-1.5 font-medium">
-                    <span aria-hidden className="shrink-0">{cat?.emoji}</span>
-                    <span className="truncate">{cat ? categoryDisplayName(cat.name, locale, cat.name_en) : ""}</span>
-                  </span>
-                  <span className="tabular shrink-0 text-right text-sm text-muted-foreground">
-                    {money(row.spentCents, locale)} / {money(row.limitCents, locale)}
-                  </span>
+                {/* Nazwa ma wlasny wiersz: obok "PLN 1,875.01 / PLN 2,500.00" zostawalo z niej
+                    jedno lub dwa znaki. */}
+                <div className="flex items-center gap-1.5 text-base font-medium">
+                  <span aria-hidden className="shrink-0">{cat?.emoji}</span>
+                  <span className="truncate">{cat ? categoryDisplayName(cat.name, locale, cat.name_en) : ""}</span>
                 </div>
                 <div className="mt-2 h-2 w-full rounded-full" style={{ background: "var(--neatly-primary-soft)" }}>
                   <div
@@ -157,10 +154,17 @@ export function BudgetTiles({
                     style={{ width: `${pct}%`, background: over ? "var(--destructive)" : cat?.color }}
                   />
                 </div>
-                <div className="mt-1 text-xs" style={{ color: over ? "var(--destructive)" : "var(--muted-foreground)" }}>
-                  {over
-                    ? `${t.over} ${money(row.spentCents - row.limitCents, locale)}`
-                    : `${t.left} ${money(row.limitCents - row.spentCents, locale)}`}
+                {/* Dwie kwoty w jednym wierszu, ale z prawem do zawiniecia — w angielskim
+                    "PLN 1,875.01 / PLN 2,500.00" i "Left PLN 624.99" nie zmieszcza sie obok siebie. */}
+                <div className="mt-1 flex flex-wrap items-baseline justify-between gap-x-2 text-xs">
+                  <span className="tabular text-muted-foreground">
+                    {money(row.spentCents, locale)} / {money(row.limitCents, locale)}
+                  </span>
+                  <span className="tabular" style={{ color: over ? "var(--destructive)" : "var(--muted-foreground)" }}>
+                    {over
+                      ? `${t.over} ${money(row.spentCents - row.limitCents, locale)}`
+                      : `${t.left} ${money(row.limitCents - row.spentCents, locale)}`}
+                  </span>
                 </div>
               </button>
             );

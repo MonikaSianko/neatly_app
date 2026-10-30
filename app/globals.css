@@ -155,6 +155,9 @@
   /* każda kwota w tabelach musi mieć równej szerokości cyfry */
   .tabular {
     font-variant-numeric: tabular-nums;
+    /* "PLN 16,380.03" ma zwykla spacje po symbolu i bez tego lamie sie na dwie linie —
+       polskie "16 380,03 zl" trzyma sie kupy samo, bo Intl wstawia tam spacje nierozdzielajaca. */
+    white-space: nowrap;
   }
   button:not(:disabled),
   a[href],

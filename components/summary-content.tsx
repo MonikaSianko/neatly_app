@@ -366,7 +366,7 @@ function Amount({
         <div className="text-sm text-muted-foreground">{label}</div>
         <div className="text-xs text-muted-foreground opacity-70">{hint}</div>
       </div>
-      <div className="tabular text-lg font-semibold" style={{ color }}>
+      <div className="tabular shrink-0 text-lg font-semibold" style={{ color }}>
         {value}
       </div>
     </div>

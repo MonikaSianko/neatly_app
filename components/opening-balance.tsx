@@ -59,11 +59,11 @@ export function OpeningBalance({
           setAmount((openingCents / 100).toFixed(2).replace(".", ","));
           setOpen(true);
         }}
-        className="flex items-center gap-1 text-base text-muted-foreground"
+        className="flex min-w-0 max-w-full items-center gap-1 text-base text-muted-foreground"
       >
-        {t.opening}
-        <span className="tabular font-medium text-foreground">{money(openingCents, locale)}</span>
-        <Pencil className="h-3 w-3" />
+        <span className="truncate">{t.opening}</span>
+        <span className="tabular shrink-0 font-medium text-foreground">{money(openingCents, locale)}</span>
+        <Pencil className="h-3 w-3 shrink-0" />
       </button>
 
       <Sheet open={open} onOpenChange={setOpen}>

@@ -89,7 +89,7 @@ type SortDir = "asc" | "desc";
  * Szerokosci dobrane tak, zeby tabela zmiescila sie bez przewijania w poziomie od lg w gore:
  * przy lg (jedna kolumna) dostepne ~990px, przy xl (z panelem bocznym) ~910px.
  */
-const GRID = "grid grid-cols-[28px_1.5fr_1.1fr_96px_92px_116px_120px_32px_32px]";
+const GRID = "grid grid-cols-[28px_1.5fr_1.1fr_90px_86px_128px_120px_32px_32px]";
 
 /** Ile oplaconych pozycji widac bez rozwijania — swieza historia pod reka, reszta schowana. */
 const PAID_PREVIEW = 5;
@@ -968,7 +968,7 @@ export function UpcomingTable({
           })}
 
           {rows.length > 0 && drafts.length === 0 && (
-            <div className="flex items-center justify-between border-t border-border bg-muted px-4 py-2.5 text-base">
+            <div className="flex flex-wrap items-center justify-between gap-x-3 border-t border-border bg-muted px-4 py-2.5 text-base">
               <span className="font-medium">{openGroups.length} {t.rows}</span>
               <span className="tabular font-medium">{t.netTotal} {money(netTotal, locale)}</span>
             </div>

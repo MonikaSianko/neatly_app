@@ -50,12 +50,12 @@ export function SummaryCard({ summary, opening }: { summary: Summary; opening: R
         <div className="flex items-start gap-3">
           <div className="min-w-0 flex-1">
             <Label text={t.accountBalance} info={t.accountBalanceInfo} />
-            <div className="tabular text-xl font-semibold">{money(summary.accountBalance, locale)}</div>
+            <div className="tabular text-lg font-semibold">{money(summary.accountBalance, locale)}</div>
           </div>
           <div className="min-w-0 text-right">
             <Label text={t.balanceNow} info={t.balanceNowInfo} />
             <div
-              className="tabular text-xl font-semibold"
+              className="tabular text-lg font-semibold"
               style={{ color: summary.balanceNow < 0 ? "var(--destructive)" : "var(--neatly-success)" }}
             >
               {money(summary.balanceNow, locale)}
@@ -92,21 +92,23 @@ export function SummaryCard({ summary, opening }: { summary: Summary; opening: R
         )}
       </div>
 
-      {/* Desktop: wszystkie pieć wartosci od razu */}
-      <div className="mt-3 hidden grid-cols-2 gap-3 sm:grid">
-        <div>
+      {/* Desktop: wszystkie pieć wartosci od razu. Dwie kolumny tylko tam, gdzie karta jest
+          szeroka — w bocznej kolumnie (320px) angielskie "Planned expenses" i "PLN 16,380.03"
+          nie mieszcza sie obok siebie i kwoty wchodza jedna na druga. */}
+      <div className="mt-3 hidden grid-cols-2 gap-3 sm:grid xl:grid-cols-1 xl:gap-2.5">
+        <div className="min-w-0">
           <Label text={t.income} info={t.incomeInfo} />
           <div className="tabular text-xl font-semibold">{money(summary.income, locale)}</div>
         </div>
-        <div>
+        <div className="min-w-0">
           <Label text={t.plannedExpenses} info={t.plannedExpensesInfo} />
           <div className="tabular text-xl font-semibold">{money(summary.plannedExpenses, locale)}</div>
         </div>
-        <div>
+        <div className="min-w-0">
           <Label text={t.accountBalance} info={t.accountBalanceInfo} />
           <div className="tabular text-xl font-semibold">{money(summary.accountBalance, locale)}</div>
         </div>
-        <div>
+        <div className="min-w-0">
           <Label text={t.balanceWithBudgets} info={t.balanceWithBudgetsInfo} />
           <div className="tabular text-xl font-semibold" style={{ color: "var(--neatly-primary-dark)" }}>
             {money(summary.balanceWithBudgets, locale)}
@@ -151,7 +153,7 @@ function SummaryCardSkeleton({ opening }: { opening: ReactNode }) {
         <div className="h-10 w-10 shrink-0 animate-pulse rounded-[10px] bg-muted" />
       </div>
 
-      <div className="mt-3 hidden grid-cols-2 gap-3 sm:grid">
+      <div className="mt-3 hidden grid-cols-2 gap-3 sm:grid xl:grid-cols-1 xl:gap-2.5">
         {Array.from({ length: 4 }, (_, i) => (
           <div key={i}>
             <div className="h-3 w-24 animate-pulse rounded bg-muted" />

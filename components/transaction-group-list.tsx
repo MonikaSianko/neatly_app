@@ -246,8 +246,8 @@ export function TransactionGroupList({
                 <span className="flex-1 truncate text-base font-medium">
                   {group.category ? categoryDisplayName(group.category.name, locale, group.category.name_en) : "—"}
                 </span>
-                <span className="text-sm text-muted-foreground">{group.items.length} {t.rows}</span>
-                <span className="tabular text-base font-medium">{money(group.sum, locale)}</span>
+                <span className="shrink-0 text-sm text-muted-foreground">{group.items.length} {t.rows}</span>
+                <span className="tabular shrink-0 text-base font-medium">{money(group.sum, locale)}</span>
                 <ChevronDown
                   className="h-4 w-4 text-muted-foreground transition-transform"
                   style={{ transform: isOpen ? "rotate(180deg)" : undefined }}
@@ -330,7 +330,7 @@ export function TransactionGroupList({
                           </a>
                         )}
                         <span
-                          className="tabular text-base font-medium"
+                          className="tabular shrink-0 text-base font-medium"
                           style={row.is_refund ? { color: "var(--neatly-primary-dark)" } : undefined}
                         >
                           {money(row.is_refund ? -row.amount_cents : row.amount_cents, locale)}
