@@ -107,8 +107,12 @@ type DraftRow = {
 let keySeq = 0;
 const nextKey = () => `draft-${++keySeq}-${Date.now()}`;
 
+/**
+ * Wiersz roboczy jest domyslnie oplacony: hurtowo przepisuje sie wyciag albo paragony,
+ * czyli pozycje juz rozliczone. Przyszle zobowiazania dodaje sie pojedynczo przyciskiem "+".
+ */
 function mkRow(kind: "expense" | "income", categoryId: string, date: string, patch: Partial<DraftRow> = {}): DraftRow {
-  return { key: nextKey(), kind, title: "", categoryId, date, amount: "", isPaid: false, ...patch };
+  return { key: nextKey(), kind, title: "", categoryId, date, amount: "", isPaid: true, ...patch };
 }
 
 export function UpcomingTable({
