@@ -55,8 +55,13 @@ export default async function Home({
   const range = monthRange(ym);
 
   /**
-   * Nowy wpis dziedziczy date ostatniej oplaconej pozycji — przy przepisywaniu wyciagu
+   * Nowy wpis dziedziczy date pozycji oplaconej ostatnio — przy przepisywaniu wyciagu
    * kolejne pozycje maja zwykle te sama albo bliska date, wiec to oszczedza klikania.
+   *
+   * "Ostatnia" znaczy odhaczona najpozniej (paid_at), a nie ta o najdalszym terminie:
+   * subskrypcja z terminem na 22. moze byc odhaczona z gory, kiedy ostatni realny zakup
+   * byl 17. Dla wpisow sprzed wprowadzenia tej reguly, ktore nie maja paid_at, decyduje
+   * kolejnosc dodania.
    *
    * Szukamy tylko w ogladanym miesiacu: data z innego miesiaca wypchnelaby swiezy wpis
    * poza widok, w ktorym sie go dodaje. Gdy nic nie jest jeszcze oplacone, zostaje
@@ -71,7 +76,8 @@ export default async function Home({
         .eq("is_paid", true)
         .gte("date", range.from)
         .lte("date", range.to)
-        .order("date", { ascending: false })
+        .order("paid_at", { ascending: false, nullsFirst: false })
+        .order("created_at", { ascending: false })
         .limit(1)
         .maybeSingle()
     : { data: null };

@@ -70,6 +70,12 @@ export async function updateTransaction(id: string, input: TransactionInput) {
   const trimmed = input.title.trim();
 
   const supabase = await createClient();
+
+  // Moment oplacenia zostaje ten sam, dopoki pozycja jest oplacona; odhaczenie go kasuje,
+  // a zaznaczenie w formularzu ustawia teraz. Bez tego wpisy oplacone przez edycje mialyby
+  // puste paid_at i wypadaly z sortowania "ostatnio oplacone".
+  const { data: current } = await supabase.from("transactions").select("paid_at").eq("id", id).single();
+
   const { error } = await supabase
     .from("transactions")
     .update({
@@ -79,6 +85,7 @@ export async function updateTransaction(id: string, input: TransactionInput) {
       category_id: input.categoryId,
       date: input.date,
       is_paid: input.isPaid,
+      paid_at: input.isPaid ? (current?.paid_at ?? new Date().toISOString()) : null,
       payment_url: input.paymentUrl,
       grace_days: input.graceDays,
       note: input.note,
